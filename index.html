@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Encuesta Compartir Aprendizajes - Santillana</title>
+    <title>Encuesta Estudiantes - Santillana</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* Estilos de la Encuesta (Mantenidos Intactos) */
+        /* Estilos de la Encuesta */
         .likert-btn { border: 1px solid #e2e8f0; background-color: #ffffff; color: #64748b; transition: all 0.2s; }
         .likert-btn:hover { border-color: #d946ef; color: #d946ef; }
         .likert-btn.active { background-color: #d946ef; color: white; border-color: #d946ef; box-shadow: 0 4px 10px rgba(217, 70, 239, 0.3); }
@@ -79,7 +79,7 @@
             </div>
             
             <h1 class="text-4xl md:text-5xl font-bold text-[#0f172a]">Encuesta de Satisfacción</h1>
-            <p class="text-fuchsia-600 mt-2 font-medium text-lg md:text-xl">Tu experiencia digital es nuestro motor de innovación.</p>
+            <p class="text-fuchsia-600 mt-2 font-medium text-lg md:text-xl">Estudiantes, su experiencia digital es nuestro motor de innovación.</p>
 
             <div class="glass-card p-8 rounded-2xl w-full relative z-50 mt-8 text-left border-t-4 border-t-fuchsia-500">
                 <label class="block text-base font-bold mb-3 text-slate-700">Para comenzar, busca tu colegio:</label>
@@ -100,14 +100,14 @@
         <section id="questions-page" class="hidden flex flex-col space-y-8 w-full max-w-4xl mx-auto">
             <div class="text-center mb-8">
                 <h2 class="text-3xl font-bold text-[#0f172a]">Experiencia y Usabilidad</h2>
-                <p class="text-sm text-slate-500 mt-1">Califica de 1 a 5, donde 1 es "Muy difícil" y 5 es "Muy fácil".</p>
+                <p class="text-sm text-slate-500 mt-1">Califica de 1 a 5, donde 1 es "Muy difícil/Nada coherente" y 5 es "Muy fácil/Totalmente coherente".</p>
                 <p id="display-school-name" class="text-fuchsia-600 font-bold mt-2 text-xl"></p>
             </div>
 
             <div id="questions-container" class="space-y-4"></div>
 
             <div class="glass-card p-6 rounded-2xl">
-                <label class="block font-bold mb-3 text-[#0f172a]">Pregunta Abierta: ¿Qué funcionalidad específica mejorarías o agregarías para facilitar aún más tu labor docente?</label>
+                <label class="block font-bold mb-3 text-[#0f172a]">Pregunta Abierta: ¿Qué funcionalidad específica mejorarías o agregarías para facilitar tu aprendizaje en la plataforma?</label>
                 <textarea id="open-question" rows="4" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-fuchsia-500 outline-none transition" placeholder="Escribe tus comentarios o sugerencias aquí..."></textarea>
             </div>
 
@@ -140,7 +140,7 @@
             <div class="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h2 class="text-4xl font-bold text-[#0f172a] tracking-tight">Dashboard</h2>
-                    <p class="text-slate-500 font-medium mt-1 uppercase tracking-widest text-sm">Analytics Globales</p>
+                    <p class="text-slate-500 font-medium mt-1 uppercase tracking-widest text-sm">Analytics Estudiantes</p>
                 </div>
                 
                 <div class="flex gap-4">
@@ -177,7 +177,7 @@
 
                 <div class="w-full lg:w-2/3">
                     <div class="neo-card p-8 h-full flex flex-col">
-                        <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">Análisis de Dimensiones Pedagógicas</h3>
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">Análisis de Experiencia</h3>
                         <div class="flex-grow min-h-[300px] w-full"><canvas id="chartGlobal"></canvas></div>
                     </div>
                 </div>
@@ -240,7 +240,6 @@
                         navLogos.classList.add('md:flex');
                     }
 
-                    // Toggle Neumorphism Background para Admin
                     if (!adminDash.classList.contains('hidden')) {
                         body.classList.remove('bg-slate-50');
                         body.classList.add('neo-bg');
