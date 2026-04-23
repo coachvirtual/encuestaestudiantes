@@ -1,16 +1,17 @@
-// Importamos Firebase Modular (SDK v10)
+// Importamos Firebase Modular (SDK v10) manteniendo CDN para HTML puro
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, writeBatch, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.18.5/package/xlsx.mjs";
 
+// Nuevas credenciales de Firebase para Estudiantes
 const firebaseConfig = {
-  apiKey: "AIzaSyAlXur94Ocr0tbpdBxDEskQm6S0IYfY2ug", 
-  authDomain: "encuestaconocimientosdocentes.firebaseapp.com",
-  projectId: "encuestaconocimientosdocentes",
-  storageBucket: "encuestaconocimientosdocentes.firebasestorage.app",
-  messagingSenderId: "723938434550",
-  appId: "1:723938434550:web:d8c9394ffdd83b6b5b3bd7",
-  measurementId: "G-1MPLY3YQVQ"
+  apiKey: "AIzaSyD1x1CTKPw_rShy2jOoWCMWXwU6_kcXxDk",
+  authDomain: "encuesta-compartir-estudiantes.firebaseapp.com",
+  projectId: "encuesta-compartir-estudiantes",
+  storageBucket: "encuesta-compartir-estudiantes.firebasestorage.app",
+  messagingSenderId: "688700749688",
+  appId: "1:688700749688:web:7db07e85611fe691d03a8d",
+  measurementId: "G-CL4WBHB7GW"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -23,17 +24,32 @@ let answers = {};
 
 let allResponses = [];
 let chartInstances = {}; 
-let displayLimit = 10; // Para la tabla
+let displayLimit = 10;
 
+// Preguntas actualizadas para estudiantes (Se eliminó la duplicada)
 const questions = [
-    "¿Qué tan fácil te resulta ingresar, navegar y encontrar las funciones principales dentro de la plataforma?",
-    "¿Qué tan sencillo es ubicar en el LMS los recursos digitales sugeridos en tu libro impreso?",
-    "¿Qué tan intuitivo es crear actividades personalizadas, enlazar contenidos y enriquecerlas con tus propios recursos (audio, video, PDF)?",
-    "¿Qué tan precisos y útiles son los datos de rendimiento que te entrega el panel de calificaciones para hacer seguimiento a tus estudiantes?",
-    "¿Qué tan ágil resulta crear y enviar notificaciones o anuncios por el panel a tu grupo?"
+    "¿Qué tan fácil es explorar los contenidos de los libros web?",
+    "El diseño visual de la plataforma (colores, distribución de elementos) te parece:",
+    "¿Qué tan fácil es ubicar y acceder a las actividades y tareas asignadas por el docente?",
+    "¿Consideras que las correcciones y el feedback de tus actividades son coherentes con tus respuestas?",
+    "Cuando un docente califica o asigna una tarea, ¿recibes una notificación oportuna en la plataforma?",
+    "Si accedes a la plataforma desde tu móvil o tableta, ¿funciona correctamente para consumir contenido?",
+    "El proceso de inicio de sesión (usuario y contraseña) te parece:",
+    "¿Qué tan fácil es ver tu progreso o el estado de realización de actividades digitales (vistos/no vistos, ejercicios realizados)?"
 ];
 
-const chartLabels = ["Acceso/Navegación", "Recursos Físico-Digital", "Creación Actividades", "Datos Rendimiento", "Comunicación"];
+// Etiquetas cortas para el gráfico global
+const chartLabels = [
+    "Exploración", 
+    "Diseño Visual", 
+    "Acceso Tareas", 
+    "Feedback", 
+    "Notificaciones", 
+    "Uso Móvil/Tablet", 
+    "Inicio Sesión", 
+    "Progreso"
+];
+
 const allRegions = ['Costa Norte', 'Costa Sur', 'Oriente', 'Occidente', 'Antioquia y Eje', 'Bogotá Norte', 'Bogotá Sur', 'Centro'];
 
 // --- NAVEGACIÓN ---
@@ -215,9 +231,7 @@ async function loadDashboardData() {
     try {
         const querySnapshot = await getDocs(collection(db, "respuestas"));
         allResponses = [];
-        // Guardamos el ID de Firestore para poder borrar luego
         querySnapshot.forEach(doc => allResponses.push({ firestoreId: doc.id, ...doc.data() }));
-
         updateDashboardView();
     } catch (e) {
         console.error("Error cargando dashboard:", e);
@@ -237,14 +251,16 @@ function updateDashboardView() {
         return;
     }
 
-    // Calcular KPIs Generales
-    let sumasPreguntas = [0, 0, 0, 0, 0];
+    // Calcular KPIs Generales de manera dinámica según la cantidad de preguntas
+    let sumasPreguntas = new Array(questions.length).fill(0);
     allResponses.forEach(r => {
-        for(let i=0; i<5; i++) { sumasPreguntas[i] += r.respuestas_likert[i] || 0; }
+        for(let i = 0; i < questions.length; i++) { 
+            sumasPreguntas[i] += r.respuestas_likert[i] || 0; 
+        }
     });
 
     const promediosPreguntas = sumasPreguntas.map(s => s / total);
-    const globalAvg = (promediosPreguntas.reduce((a,b)=>a+b,0) / 5).toFixed(1);
+    const globalAvg = (promediosPreguntas.reduce((a,b)=>a+b,0) / questions.length).toFixed(1);
     document.getElementById('stat-avg').innerText = globalAvg;
 
     // --- GRÁFICOS ---
@@ -279,13 +295,13 @@ function updateDashboardView() {
         }
     });
 
-    // 2. Gráfico Regional (Regiones ancladas para simetría)
+    // 2. Gráfico Regional
     const regMap = {};
-    allRegions.forEach(r => regMap[r] = { sum: 0, count: 0 }); // Iniciar en 0
+    allRegions.forEach(r => regMap[r] = { sum: 0, count: 0 });
     allResponses.forEach(r => {
         const reg = r.regional;
         if(regMap[reg] !== undefined) {
-            const avgDoc = Object.values(r.respuestas_likert).reduce((a,b)=>a+b,0) / 5;
+            const avgDoc = Object.values(r.respuestas_likert).reduce((a,b)=>a+b,0) / questions.length;
             regMap[reg].sum += avgDoc;
             regMap[reg].count++;
         }
@@ -326,12 +342,12 @@ function updateDashboardView() {
         }
     });
 
-    // 3. Gráfico Línea de Negocio (Mismo estilo que el regional, dinámico)
+    // 3. Gráfico Línea de Negocio
     const linMap = {};
     allResponses.forEach(r => {
         const lin = r.lineaNegocio || "Sin asignar";
         if(!linMap[lin]) linMap[lin] = { sum: 0, count: 0 };
-        const avgDoc = Object.values(r.respuestas_likert).reduce((a,b)=>a+b,0) / 5;
+        const avgDoc = Object.values(r.respuestas_likert).reduce((a,b)=>a+b,0) / questions.length;
         linMap[lin].sum += avgDoc;
         linMap[lin].count++;
     });
@@ -384,8 +400,8 @@ function renderTable() {
     const toShow = sorted.slice(0, displayLimit);
 
     toShow.forEach(c => {
-        // Calcular promedio de la encuesta
-        const avg = (Object.values(c.respuestas_likert).reduce((a,b)=>a+b,0) / 5).toFixed(1);
+        // Calcular promedio de la encuesta dinámico
+        const avg = (Object.values(c.respuestas_likert).reduce((a,b)=>a+b,0) / questions.length).toFixed(1);
         
         // Colores condicionales
         let colorClass = "bg-green-100 text-green-700 border-green-200"; // > 4.3
@@ -423,13 +439,12 @@ document.getElementById('btn-load-more').addEventListener('click', () => {
     renderTable();
 });
 
-// Función de eliminación adjunta a window para acceder desde HTML
 window.deleteSurvey = async (id) => {
     if(confirm("¿Estás seguro de eliminar esta encuesta?")) {
         if(confirm("Esta acción es definitiva y borrará los datos de la base. ¿Confirmar?")) {
             try {
                 await deleteDoc(doc(db, "respuestas", id));
-                loadDashboardData(); // Recarga los datos
+                loadDashboardData(); 
             } catch(e) {
                 alert("Error eliminando la encuesta.");
                 console.error(e);
@@ -441,6 +456,8 @@ window.deleteSurvey = async (id) => {
 // --- 6. EXPORTAR A EXCEL ---
 document.getElementById('btn-export').addEventListener('click', async () => {
     if (allResponses.length === 0) { alert("No hay datos."); return; }
+    
+    // Adaptado a las 8 preguntas
     const dataToExport = allResponses.map(data => ({
         "Fecha": new Date(data.fecha).toLocaleString(),
         "Regional": data.regional,
@@ -448,17 +465,20 @@ document.getElementById('btn-export').addEventListener('click', async () => {
         "Línea de Negocio": data.lineaNegocio,
         "Clasificación": data.clasificacion,
         "Coach": data.coach,
-        "P1. Acceso": data.respuestas_likert[0],
-        "P2. Recursos": data.respuestas_likert[1],
-        "P3. Actividades": data.respuestas_likert[2],
-        "P4. Datos": data.respuestas_likert[3],
-        "P5. Comunicación": data.respuestas_likert[4],
+        "P1. Exploración": data.respuestas_likert[0] || "",
+        "P2. Diseño Visual": data.respuestas_likert[1] || "",
+        "P3. Acceso a Tareas": data.respuestas_likert[2] || "",
+        "P4. Feedback": data.respuestas_likert[3] || "",
+        "P5. Notificaciones": data.respuestas_likert[4] || "",
+        "P6. Uso Móvil/Tablet": data.respuestas_likert[5] || "",
+        "P7. Inicio Sesión": data.respuestas_likert[6] || "",
+        "P8. Progreso": data.respuestas_likert[7] || "",
         "Sugerencias": data.comentario_abierto
     }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Resultados");
-    XLSX.writeFile(wb, "Dashboard_CompartirAprendizajes.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "Resultados Estudiantes");
+    XLSX.writeFile(wb, "Dashboard_Estudiantes.xlsx");
 });
 
 // --- ADMIN LOGIN ---
