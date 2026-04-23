@@ -3,7 +3,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebas
 import { getFirestore, collection, addDoc, getDocs, writeBatch, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.18.5/package/xlsx.mjs";
 
-// Nuevas credenciales de Firebase para Estudiantes
+// Credenciales de Firebase para Estudiantes
 const firebaseConfig = {
   apiKey: "AIzaSyD1x1CTKPw_rShy2jOoWCMWXwU6_kcXxDk",
   authDomain: "encuesta-compartir-estudiantes.firebaseapp.com",
@@ -26,31 +26,27 @@ let allResponses = [];
 let chartInstances = {}; 
 let displayLimit = 10;
 
-// Preguntas actualizadas para estudiantes (Se eliminó la duplicada)
+// Preguntas actualizadas (7 preguntas, se eliminó la de Feedback)
 const questions = [
     "¿Qué tan fácil es explorar los contenidos de los libros web?",
     "El diseño visual de la plataforma (colores, distribución de elementos) te parece:",
     "¿Qué tan fácil es ubicar y acceder a las actividades y tareas asignadas por el docente?",
-    "¿Consideras que las correcciones y el feedback de tus actividades son coherentes con tus respuestas?",
     "Cuando un docente califica o asigna una tarea, ¿recibes una notificación oportuna en la plataforma?",
     "Si accedes a la plataforma desde tu móvil o tableta, ¿funciona correctamente para consumir contenido?",
     "El proceso de inicio de sesión (usuario y contraseña) te parece:",
     "¿Qué tan fácil es ver tu progreso o el estado de realización de actividades digitales (vistos/no vistos, ejercicios realizados)?"
 ];
 
-// Etiquetas cortas para el gráfico global
+// Etiquetas cortas para el gráfico global (7 etiquetas)
 const chartLabels = [
     "Exploración", 
     "Diseño Visual", 
     "Acceso Tareas", 
-    "Feedback", 
     "Notificaciones", 
     "Uso Móvil/Tablet", 
     "Inicio Sesión", 
     "Progreso"
 ];
-
-const allRegions = ['Costa Norte', 'Costa Sur', 'Oriente', 'Occidente', 'Antioquia y Eje', 'Bogotá Norte', 'Bogotá Sur', 'Centro'];
 
 // --- NAVEGACIÓN ---
 const showPage = (id) => {
@@ -165,6 +161,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         showPage('thank-you-page');
         setTimeout(() => resetApp(), 3500);
     } catch (e) {
+        console.error(e);
         alert("Hubo un error al enviar la encuesta.");
         submitBtn.innerText = "Finalizar Encuesta"; submitBtn.disabled = false;
     }
@@ -217,7 +214,10 @@ document.getElementById('excel-import').addEventListener('change', (e) => {
             await batch.commit();
             alert(`¡Cargados ${registrosAgregados} colegios a la BD!`);
             e.target.value = ''; loadSchoolsFromFirebase(); 
-        } catch (error) { alert("Error leyendo el Excel."); }
+        } catch (error) { 
+            console.error(error);
+            alert("Error leyendo el Excel."); 
+        }
     };
     reader.readAsArrayBuffer(file);
 });
@@ -226,6 +226,15 @@ document.getElementById('excel-import').addEventListener('change', (e) => {
 
 Chart.defaults.font.family = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 Chart.defaults.color = '#94a3b8'; 
+
+// Función segura para calcular el promedio de una sola encuesta
+const calcularPromedioDoc = (respuestas) => {
+    let sum = 0; let count = 0;
+    for(let i = 0; i < questions.length; i++) {
+        if(respuestas[i]) { sum += respuestas[i]; count++; }
+    }
+    return count > 0 ? (sum / count) : 0;
+};
 
 async function loadDashboardData() {
     try {
@@ -251,7 +260,6 @@ function updateDashboardView() {
         return;
     }
 
-    // Calcular KPIs Generales de manera dinámica según la cantidad de preguntas
     let sumasPreguntas = new Array(questions.length).fill(0);
     allResponses.forEach(r => {
         for(let i = 0; i < questions.length; i++) { 
@@ -263,9 +271,7 @@ function updateDashboardView() {
     const globalAvg = (promediosPreguntas.reduce((a,b)=>a+b,0) / questions.length).toFixed(1);
     document.getElementById('stat-avg').innerText = globalAvg;
 
-    // --- GRÁFICOS ---
-
-    // 1. Gráfico Global
+    // --- 1. Gráfico Global ---
     const ctxGlobal = document.getElementById('chartGlobal').getContext('2d');
     if(chartInstances['chartGlobal']) chartInstances['chartGlobal'].destroy();
     
@@ -295,18 +301,20 @@ function updateDashboardView() {
         }
     });
 
-    // 2. Gráfico Regional
+    // --- 2. Gráfico Regional (AHORA DINÁMICO) ---
     const regMap = {};
-    allRegions.forEach(r => regMap[r] = { sum: 0, count: 0 });
     allResponses.forEach(r => {
-        const reg = r.regional;
-        if(regMap[reg] !== undefined) {
-            const avgDoc = Object.values(r.respuestas_likert).reduce((a,b)=>a+b,0) / questions.length;
-            regMap[reg].sum += avgDoc;
-            regMap[reg].count++;
-        }
+        let reg = r.regional;
+        if (!reg || reg.trim() === "") reg = "Sin asignar";
+        else reg = reg.trim();
+
+        if(!regMap[reg]) regMap[reg] = { sum: 0, count: 0 };
+        regMap[reg].sum += calcularPromedioDoc(r.respuestas_likert);
+        regMap[reg].count++;
     });
-    const regData = allRegions.map(l => regMap[l].count > 0 ? (regMap[l].sum / regMap[l].count).toFixed(2) : null);
+    
+    const regLabels = Object.keys(regMap);
+    const regData = regLabels.map(l => (regMap[l].sum / regMap[l].count).toFixed(2));
     
     const ctxReg = document.getElementById('chartRegional').getContext('2d');
     if(chartInstances['chartRegional']) chartInstances['chartRegional'].destroy();
@@ -318,7 +326,7 @@ function updateDashboardView() {
     chartInstances['chartRegional'] = new Chart(ctxReg, {
         type: 'bar',
         data: {
-            labels: allRegions,
+            labels: regLabels,
             datasets: [
                 {
                     type: 'scatter', 
@@ -342,15 +350,18 @@ function updateDashboardView() {
         }
     });
 
-    // 3. Gráfico Línea de Negocio
+    // --- 3. Gráfico Línea de Negocio ---
     const linMap = {};
     allResponses.forEach(r => {
-        const lin = r.lineaNegocio || "Sin asignar";
+        let lin = r.lineaNegocio;
+        if (!lin || lin.trim() === "") lin = "Sin asignar";
+        else lin = lin.trim();
+
         if(!linMap[lin]) linMap[lin] = { sum: 0, count: 0 };
-        const avgDoc = Object.values(r.respuestas_likert).reduce((a,b)=>a+b,0) / questions.length;
-        linMap[lin].sum += avgDoc;
+        linMap[lin].sum += calcularPromedioDoc(r.respuestas_likert);
         linMap[lin].count++;
     });
+    
     const linLabels = Object.keys(linMap);
     const linData = linLabels.map(l => (linMap[l].sum / linMap[l].count).toFixed(2));
     
@@ -400,11 +411,10 @@ function renderTable() {
     const toShow = sorted.slice(0, displayLimit);
 
     toShow.forEach(c => {
-        // Calcular promedio de la encuesta dinámico
-        const avg = (Object.values(c.respuestas_likert).reduce((a,b)=>a+b,0) / questions.length).toFixed(1);
+        const avg = calcularPromedioDoc(c.respuestas_likert).toFixed(1);
         
         // Colores condicionales
-        let colorClass = "bg-green-100 text-green-700 border-green-200"; // > 4.3
+        let colorClass = "bg-green-100 text-green-700 border-green-200"; 
         if (avg <= 3.9) colorClass = "bg-red-100 text-red-700 border-red-200";
         else if (avg >= 4.0 && avg <= 4.3) colorClass = "bg-orange-100 text-orange-700 border-orange-200";
 
@@ -457,7 +467,7 @@ window.deleteSurvey = async (id) => {
 document.getElementById('btn-export').addEventListener('click', async () => {
     if (allResponses.length === 0) { alert("No hay datos."); return; }
     
-    // Adaptado a las 8 preguntas
+    // Adaptado a las 7 preguntas actuales
     const dataToExport = allResponses.map(data => ({
         "Fecha": new Date(data.fecha).toLocaleString(),
         "Regional": data.regional,
@@ -468,11 +478,10 @@ document.getElementById('btn-export').addEventListener('click', async () => {
         "P1. Exploración": data.respuestas_likert[0] || "",
         "P2. Diseño Visual": data.respuestas_likert[1] || "",
         "P3. Acceso a Tareas": data.respuestas_likert[2] || "",
-        "P4. Feedback": data.respuestas_likert[3] || "",
-        "P5. Notificaciones": data.respuestas_likert[4] || "",
-        "P6. Uso Móvil/Tablet": data.respuestas_likert[5] || "",
-        "P7. Inicio Sesión": data.respuestas_likert[6] || "",
-        "P8. Progreso": data.respuestas_likert[7] || "",
+        "P4. Notificaciones": data.respuestas_likert[3] || "", 
+        "P5. Uso Móvil/Tablet": data.respuestas_likert[4] || "",
+        "P6. Inicio Sesión": data.respuestas_likert[5] || "",
+        "P7. Progreso": data.respuestas_likert[6] || "",
         "Sugerencias": data.comentario_abierto
     }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
