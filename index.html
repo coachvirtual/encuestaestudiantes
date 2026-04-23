@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encuesta Compartir Aprendizajes - Santillana</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Estilos de la Encuesta (Mantenidos Intactos) */
+        .likert-btn { border: 1px solid #e2e8f0; background-color: #ffffff; color: #64748b; transition: all 0.2s; }
+        .likert-btn:hover { border-color: #d946ef; color: #d946ef; }
+        .likert-btn.active { background-color: #d946ef; color: white; border-color: #d946ef; box-shadow: 0 4px 10px rgba(217, 70, 239, 0.3); }
+        .glass-card { background: #ffffff; border: 1px solid #f1f5f9; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); }
+        
+        /* Estilos "Soft UI" exclusivos para el Panel Admin */
+        .neo-bg { background-color: #f3f4f6; }
+        
+        .soft-card { 
+            background: #ffffff; 
+            border-radius: 1.5rem; 
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 20px 40px -10px rgba(217, 70, 239, 0.08), 0 10px 20px -5px rgba(0, 0, 0, 0.04); 
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .soft-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 25px 50px -12px rgba(217, 70, 239, 0.12), 0 15px 25px -5px rgba(0, 0, 0, 0.05);
+        }
+
+        .neo-card {
+            background: #f3f4f6;
+            border-radius: 1.5rem;
+            box-shadow: 12px 12px 24px #d1d5db, -12px -12px 24px #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .neo-inset {
+            background: #f3f4f6;
+            border-radius: 1rem;
+            box-shadow: inset 6px 6px 12px #d1d5db, inset -6px -6px 12px #ffffff;
+            border: none;
+        }
+
+        .neo-button {
+            background: #f3f4f6;
+            box-shadow: 6px 6px 12px #d1d5db, -6px -6px 12px #ffffff;
+            transition: all 0.2s ease;
+        }
+        .neo-button:active {
+            box-shadow: inset 4px 4px 8px #d1d5db, inset -4px -4px 8px #ffffff;
+        }
+
+        section { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] min-h-screen flex flex-col transition-colors duration-500" id="main-body">
+
+    <nav class="p-4 bg-white/90 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50 flex justify-between items-center px-8 shadow-sm" id="main-nav">
+        <div id="nav-logos" class="flex items-center gap-4 hidden md:flex">
+             <img src="./assets/logo-santillana.png" alt="Santillana" class="h-8 object-contain">
+             <div class="h-6 w-px bg-slate-200"></div>
+             <img src="./assets/logo-compartir-aprendizajes.JPG" alt="Compartir Aprendizajes" class="h-10 object-contain mix-blend-multiply">
+        </div>
+        <div class="ml-auto">
+             <button id="btn-show-admin" class="text-sm font-bold text-slate-400 hover:text-fuchsia-600 transition">Acceso Administrador</button>
+        </div>
+    </nav>
+
+    <div id="app" class="max-w-7xl mx-auto py-10 px-4 flex-grow w-full flex flex-col justify-center">
+        
+        <section id="welcome-page" class="flex flex-col items-center text-center space-y-8 w-full max-w-2xl mx-auto">
+            <div class="flex items-center gap-8 justify-center mb-4">
+                <img src="./assets/logo-santillana.png" alt="Santillana" class="h-16 md:h-20 object-contain">
+                <div class="h-14 w-px bg-slate-300"></div>
+                <img src="./assets/logo-compartir-aprendizajes.JPG" alt="Compartir Aprendizajes" class="h-20 md:h-28 object-contain mix-blend-multiply">
+            </div>
+            
+            <h1 class="text-4xl md:text-5xl font-bold text-[#0f172a]">Encuesta de Satisfacción</h1>
+            <p class="text-fuchsia-600 mt-2 font-medium text-lg md:text-xl">Tu experiencia digital es nuestro motor de innovación.</p>
+
+            <div class="glass-card p-8 rounded-2xl w-full relative z-50 mt-8 text-left border-t-4 border-t-fuchsia-500">
+                <label class="block text-base font-bold mb-3 text-slate-700">Para comenzar, busca tu colegio:</label>
+                <input type="text" id="school-search" placeholder="Escribe el nombre de tu institución..." 
+                       class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-fuchsia-500 outline-none transition text-lg">
+                <div id="school-results" class="absolute z-10 w-[88%] bg-white border border-slate-200 rounded-b-xl hidden shadow-2xl max-h-56 overflow-y-auto"></div>
+                
+                <div class="min-h-[2rem] mt-3">
+                    <p id="selected-school-name" class="text-sm text-fuchsia-600 font-bold hidden bg-fuchsia-50 p-2 rounded-lg border border-fuchsia-100"></p>
+                </div>
+
+                <button id="btn-start" class="w-full mt-4 bg-fuchsia-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-fuchsia-200 hover:bg-fuchsia-700 transition opacity-50 cursor-not-allowed" disabled>
+                    Iniciar Encuesta
+                </button>
+            </div>
+        </section>
+
+        <section id="questions-page" class="hidden flex flex-col space-y-8 w-full max-w-4xl mx-auto">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-[#0f172a]">Experiencia y Usabilidad</h2>
+                <p class="text-sm text-slate-500 mt-1">Califica de 1 a 5, donde 1 es "Muy difícil" y 5 es "Muy fácil".</p>
+                <p id="display-school-name" class="text-fuchsia-600 font-bold mt-2 text-xl"></p>
+            </div>
+
+            <div id="questions-container" class="space-y-4"></div>
+
+            <div class="glass-card p-6 rounded-2xl">
+                <label class="block font-bold mb-3 text-[#0f172a]">Pregunta Abierta: ¿Qué funcionalidad específica mejorarías o agregarías para facilitar aún más tu labor docente?</label>
+                <textarea id="open-question" rows="4" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-fuchsia-500 outline-none transition" placeholder="Escribe tus comentarios o sugerencias aquí..."></textarea>
+            </div>
+
+            <button id="btn-submit" class="w-full bg-[#0f172a] text-white py-4 rounded-xl font-bold text-lg hover:bg-slate-800 shadow-lg transition">
+                Finalizar Encuesta
+            </button>
+        </section>
+
+        <section id="thank-you-page" class="hidden flex flex-col items-center justify-center text-center space-y-6 py-20 w-full">
+            <div class="bg-green-50 p-6 rounded-full mb-4 border border-green-200 shadow-sm">
+                <svg class="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h2 class="text-4xl font-bold text-[#0f172a]">¡Gracias por completar la encuesta!</h2>
+            <p class="text-lg text-slate-500">Tus respuestas han sido enviadas correctamente.</p>
+            <p class="text-sm text-fuchsia-600 mt-8 font-medium animate-pulse">Volviendo al inicio...</p>
+        </section>
+
+        <section id="admin-login" class="hidden max-w-md mx-auto mt-10 neo-card p-8 w-full border-t-4 border-t-blue-500">
+            <h2 class="text-2xl font-bold mb-6 text-center text-[#0f172a]">Acceso Administrativo</h2>
+            <div class="space-y-4">
+                <input type="text" id="admin-user" placeholder="Usuario" class="w-full p-4 neo-inset text-slate-600 focus:ring-2 focus:ring-blue-400 outline-none">
+                <input type="password" id="admin-pass" placeholder="Contraseña" class="w-full p-4 neo-inset text-slate-600 focus:ring-2 focus:ring-blue-400 outline-none">
+                <button id="btn-login" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl font-bold shadow-[0_10px_20px_rgba(37,99,235,0.3)] hover:shadow-[0_15px_25px_rgba(37,99,235,0.4)] transition">Entrar al Dashboard</button>
+                <button id="btn-back-home" class="w-full text-slate-400 text-sm mt-4 hover:text-fuchsia-600">Volver a la encuesta</button>
+            </div>
+        </section>
+
+        <section id="admin-dashboard" class="hidden flex flex-col space-y-8 w-full max-w-7xl mx-auto pb-10">
+            
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <h2 class="text-4xl font-bold text-[#0f172a] tracking-tight">Dashboard</h2>
+                    <p class="text-slate-500 font-medium mt-1 uppercase tracking-widest text-sm">Analytics Globales</p>
+                </div>
+                
+                <div class="flex gap-4">
+                    <label class="neo-button text-slate-600 px-6 py-3 rounded-full cursor-pointer text-sm font-bold flex items-center gap-2 text-blue-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        Actualizar BD
+                        <input type="file" id="excel-import" class="hidden" accept=".xlsx, .xls">
+                    </label>
+                    <button id="btn-export" class="bg-gradient-to-r from-fuchsia-500 to-fuchsia-600 text-white px-6 py-3 rounded-full text-sm font-bold shadow-[0_10px_20px_rgba(217,70,239,0.3)] flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Exportar
+                    </button>
+                    <button id="btn-logout" class="neo-button text-slate-500 px-6 py-3 rounded-full text-sm font-bold">Salir</button>
+                </div>
+            </div>
+
+            <div class="flex flex-col lg:flex-row gap-8">
+                <div class="w-full lg:w-1/3 flex flex-col gap-8 justify-center">
+                    <div class="neo-card p-8 relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 w-24 h-24 bg-fuchsia-100 rounded-full blur-xl transition-transform duration-500"></div>
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2 relative z-10">Total Evaluaciones</p>
+                        <p id="stat-total" class="text-6xl font-black text-[#0f172a] relative z-10">0</p>
+                    </div>
+                    
+                    <div class="neo-card p-8 relative overflow-hidden group">
+                        <div class="absolute -right-6 -top-6 w-24 h-24 bg-blue-100 rounded-full blur-xl transition-transform duration-500"></div>
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2 relative z-10">Promedio Global</p>
+                        <div class="flex items-baseline gap-1 relative z-10">
+                            <p id="stat-avg" class="text-6xl font-black text-blue-600">0.0</p>
+                            <span class="text-xl text-slate-400 font-bold">/ 5.0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-full lg:w-2/3">
+                    <div class="neo-card p-8 h-full flex flex-col">
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">Análisis de Dimensiones Pedagógicas</h3>
+                        <div class="flex-grow min-h-[300px] w-full"><canvas id="chartGlobal"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="neo-card p-8">
+                    <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">Rendimiento por Regional</h3>
+                    <div class="h-64"><canvas id="chartRegional"></canvas></div>
+                </div>
+                <div class="neo-card p-8">
+                    <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">Rendimiento por Línea de Negocio</h3>
+                    <div class="h-64"><canvas id="chartLinea"></canvas></div>
+                </div>
+            </div>
+
+            <div class="neo-card p-8 overflow-hidden">
+                <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">Base de Datos de Encuestas</h3>
+                <div class="overflow-x-auto no-scrollbar bg-white rounded-2xl border border-slate-100 shadow-inner">
+                    <table class="w-full text-left border-collapse min-w-[1000px]">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-100">
+                                <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Colegio</th>
+                                <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Línea</th>
+                                <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Regional</th>
+                                <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Coach</th>
+                                <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider text-center">Calificación</th>
+                                <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Sugerencia</th>
+                                <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-surveys" class="text-sm divide-y divide-slate-50">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="mt-6 flex justify-center">
+                    <button id="btn-load-more" class="neo-button text-slate-500 px-6 py-2 rounded-full text-sm font-bold hidden">Cargar más (10)</button>
+                </div>
+            </div>
+
+        </section>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+    <script>
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.attributeName === "class") {
+                    const welcomePage = document.getElementById('welcome-page');
+                    const adminDash = document.getElementById('admin-dashboard');
+                    const navLogos = document.getElementById('nav-logos');
+                    const body = document.getElementById('main-body');
+                    const nav = document.getElementById('main-nav');
+
+                    if (!welcomePage.classList.contains('hidden')) {
+                        navLogos.classList.add('hidden');
+                        navLogos.classList.remove('md:flex');
+                    } else {
+                        navLogos.classList.remove('hidden');
+                        navLogos.classList.add('md:flex');
+                    }
+
+                    // Toggle Neumorphism Background para Admin
+                    if (!adminDash.classList.contains('hidden')) {
+                        body.classList.remove('bg-slate-50');
+                        body.classList.add('neo-bg');
+                        nav.classList.remove('bg-white/90');
+                        nav.classList.add('bg-[#f3f4f6]/90');
+                    } else {
+                        body.classList.add('bg-slate-50');
+                        body.classList.remove('neo-bg');
+                        nav.classList.add('bg-white/90');
+                        nav.classList.remove('bg-[#f3f4f6]/90');
+                    }
+                }
+            });
+        });
+        observer.observe(document.getElementById('welcome-page'), { attributes: true });
+        observer.observe(document.getElementById('admin-dashboard'), { attributes: true });
+    </script>
+</body>
+</html>
