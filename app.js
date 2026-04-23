@@ -26,21 +26,21 @@ let allResponses = [];
 let chartInstances = {}; 
 let displayLimit = 10;
 
-// Preguntas actualizadas (5 preguntas, enfocadas en facilidad)
+// Preguntas definitivas
 const questions = [
     "¿Qué tan fácil es acceder a Compartir Conocimientos y explorar los contenidos de los libros web?",
-    "¿Qué tan fácil es ver tus clases y hacer las tareas usando un celular o tableta?",
-    "¿Qué tan fácil es encontrar las tareas y actividades asignadas por tus docentes?",
+    "¿Qué tan fácil es navegar en tus clases y hacer las tareas usando un celular o tableta?",
     "¿Qué tan fácil es darte cuenta cuando tienes una tarea nueva o una notificación por parte de tus docentes?",
+    "Una vez que terminas tu tarea, ¿qué tan fácil es subirla o enviarla por la plataforma?",
     "¿Qué tan fácil es ver qué tareas ya terminaste y cuáles fueron tus calificaciones?"
 ];
 
-// Etiquetas cortas para el gráfico global (5 etiquetas)
+// Etiquetas cortas para el gráfico global
 const chartLabels = [
     "Acceso/Libros", 
     "Uso Móvil/Tablet", 
-    "Encontrar Tareas", 
     "Notificaciones", 
+    "Enviar Tareas", 
     "Progreso/Notas"
 ];
 
@@ -463,7 +463,6 @@ window.deleteSurvey = async (id) => {
 document.getElementById('btn-export').addEventListener('click', async () => {
     if (allResponses.length === 0) { alert("No hay datos."); return; }
     
-    // Adaptado a las 5 preguntas actuales
     const dataToExport = allResponses.map(data => ({
         "Fecha": new Date(data.fecha).toLocaleString(),
         "Regional": data.regional,
@@ -473,8 +472,8 @@ document.getElementById('btn-export').addEventListener('click', async () => {
         "Coach": data.coach,
         "P1. Acceso/Libros": data.respuestas_likert[0] || "",
         "P2. Uso Móvil/Tablet": data.respuestas_likert[1] || "",
-        "P3. Encontrar Tareas": data.respuestas_likert[2] || "",
-        "P4. Notificaciones": data.respuestas_likert[3] || "", 
+        "P3. Notificaciones": data.respuestas_likert[2] || "",
+        "P4. Enviar Tareas": data.respuestas_likert[3] || "", 
         "P5. Progreso/Notas": data.respuestas_likert[4] || "",
         "Sugerencias": data.comentario_abierto
     }));
