@@ -26,26 +26,22 @@ let allResponses = [];
 let chartInstances = {}; 
 let displayLimit = 10;
 
-// Preguntas actualizadas (7 preguntas, se eliminó la de Feedback)
+// Preguntas actualizadas (5 preguntas, enfocadas en facilidad)
 const questions = [
-    "¿Qué tan fácil es explorar los contenidos de los libros web?",
-    "El diseño visual de la plataforma (colores, distribución de elementos) te parece:",
-    "¿Qué tan fácil es ubicar y acceder a las actividades y tareas asignadas por el docente?",
-    "Cuando un docente califica o asigna una tarea, ¿recibes una notificación oportuna en la plataforma?",
-    "Si accedes a la plataforma desde tu móvil o tableta, ¿funciona correctamente para consumir contenido?",
-    "El proceso de inicio de sesión (usuario y contraseña) te parece:",
-    "¿Qué tan fácil es ver tu progreso o el estado de realización de actividades digitales (vistos/no vistos, ejercicios realizados)?"
+    "¿Qué tan fácil es acceder a Compartir Conocimientos y explorar los contenidos de los libros web?",
+    "¿Qué tan fácil es ver tus clases y hacer las tareas usando un celular o tableta?",
+    "¿Qué tan fácil es encontrar las tareas y actividades asignadas por tus docentes?",
+    "¿Qué tan fácil es darte cuenta cuando tienes una tarea nueva o una notificación por parte de tus docentes?",
+    "¿Qué tan fácil es ver qué tareas ya terminaste y cuáles fueron tus calificaciones?"
 ];
 
-// Etiquetas cortas para el gráfico global (7 etiquetas)
+// Etiquetas cortas para el gráfico global (5 etiquetas)
 const chartLabels = [
-    "Exploración", 
-    "Diseño Visual", 
-    "Acceso Tareas", 
-    "Notificaciones", 
+    "Acceso/Libros", 
     "Uso Móvil/Tablet", 
-    "Inicio Sesión", 
-    "Progreso"
+    "Encontrar Tareas", 
+    "Notificaciones", 
+    "Progreso/Notas"
 ];
 
 // --- NAVEGACIÓN ---
@@ -301,7 +297,7 @@ function updateDashboardView() {
         }
     });
 
-    // --- 2. Gráfico Regional (AHORA DINÁMICO) ---
+    // --- 2. Gráfico Regional (DINÁMICO) ---
     const regMap = {};
     allResponses.forEach(r => {
         let reg = r.regional;
@@ -467,7 +463,7 @@ window.deleteSurvey = async (id) => {
 document.getElementById('btn-export').addEventListener('click', async () => {
     if (allResponses.length === 0) { alert("No hay datos."); return; }
     
-    // Adaptado a las 7 preguntas actuales
+    // Adaptado a las 5 preguntas actuales
     const dataToExport = allResponses.map(data => ({
         "Fecha": new Date(data.fecha).toLocaleString(),
         "Regional": data.regional,
@@ -475,13 +471,11 @@ document.getElementById('btn-export').addEventListener('click', async () => {
         "Línea de Negocio": data.lineaNegocio,
         "Clasificación": data.clasificacion,
         "Coach": data.coach,
-        "P1. Exploración": data.respuestas_likert[0] || "",
-        "P2. Diseño Visual": data.respuestas_likert[1] || "",
-        "P3. Acceso a Tareas": data.respuestas_likert[2] || "",
+        "P1. Acceso/Libros": data.respuestas_likert[0] || "",
+        "P2. Uso Móvil/Tablet": data.respuestas_likert[1] || "",
+        "P3. Encontrar Tareas": data.respuestas_likert[2] || "",
         "P4. Notificaciones": data.respuestas_likert[3] || "", 
-        "P5. Uso Móvil/Tablet": data.respuestas_likert[4] || "",
-        "P6. Inicio Sesión": data.respuestas_likert[5] || "",
-        "P7. Progreso": data.respuestas_likert[6] || "",
+        "P5. Progreso/Notas": data.respuestas_likert[4] || "",
         "Sugerencias": data.comentario_abierto
     }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
