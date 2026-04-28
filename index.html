@@ -100,7 +100,7 @@
         <section id="questions-page" class="hidden flex flex-col space-y-8 w-full max-w-4xl mx-auto">
             <div class="text-center mb-8">
                 <h2 class="text-3xl font-bold text-[#0f172a]">Experiencia y Usabilidad</h2>
-                <p class="text-sm text-slate-500 mt-1">Califica de 1 a 5, donde 1 es "Muy difícil" y 5 es "Muy fácil".</p>
+                <p class="text-sm text-slate-500 mt-1">Califica de 1 a 5 o selecciona la opción que mejor se adapte a tu experiencia.</p>
                 <p id="display-school-name" class="text-fuchsia-600 font-bold mt-2 text-xl"></p>
             </div>
 
@@ -177,7 +177,7 @@
                     
                     <div class="neo-card p-8 relative overflow-hidden group">
                         <div class="absolute -right-6 -top-6 w-24 h-24 bg-blue-100 rounded-full blur-xl transition-transform duration-500"></div>
-                        <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2 relative z-10">Promedio Global</p>
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2 relative z-10">Promedio Global (Likert)</p>
                         <div class="flex items-baseline gap-1 relative z-10">
                             <p id="stat-avg" class="text-6xl font-black text-blue-600">0.0</p>
                             <span class="text-xl text-slate-400 font-bold">/ 5.0</span>
@@ -247,16 +247,24 @@
             <div id="modal-questions-container" class="p-6 overflow-y-auto flex-grow space-y-4 bg-slate-50/30">
                 </div>
             
-            <div class="p-5 border-t border-slate-100 flex justify-between items-center bg-white">
-                <button id="btn-add-question" class="text-fuchsia-600 font-bold hover:text-fuchsia-700 flex items-center gap-2 text-sm px-4 py-2 rounded-xl hover:bg-fuchsia-50 transition">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                    Añadir Pregunta
-                </button>
-                <div class="flex gap-3">
+            <div class="p-5 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center bg-white gap-4">
+                <div class="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 w-full md:w-auto">
+                    <select id="new-q-type" class="bg-transparent text-sm font-bold text-slate-600 outline-none p-2 cursor-pointer w-full md:w-auto">
+                        <option value="likert">Tipo Likert (1 a 5)</option>
+                        <option value="opciones">Opción Múltiple</option>
+                        <option value="abierta">Pregunta Abierta</option>
+                    </select>
+                    <button id="btn-add-question" class="text-fuchsia-600 font-bold hover:bg-fuchsia-100 flex items-center justify-center gap-1 text-sm px-4 py-2 rounded-lg transition whitespace-nowrap">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        Añadir
+                    </button>
+                </div>
+                <div class="flex gap-3 w-full md:w-auto justify-end">
                     <button id="btn-cancel-edit" class="px-6 py-2.5 rounded-xl text-slate-500 font-bold hover:bg-slate-100 transition text-sm">Cancelar</button>
-                    <button id="btn-save-edit" class="px-6 py-2.5 rounded-xl bg-[#0f172a] text-white font-bold shadow-lg hover:bg-slate-800 transition text-sm">Guardar en Base de Datos</button>
+                    <button id="btn-save-edit" class="px-6 py-2.5 rounded-xl bg-[#0f172a] text-white font-bold shadow-lg hover:bg-slate-800 transition text-sm">Guardar Cambios</button>
                 </div>
             </div>
+            
         </div>
     </div>
 
