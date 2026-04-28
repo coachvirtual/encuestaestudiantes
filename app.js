@@ -30,7 +30,7 @@ let displayLimit = 10;
 let configEncuesta = {
     activa: false,
     fechaInicio: new Date().toISOString(), 
-    fechaFin: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // Por defecto, 1 año
+    fechaFin: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
     preguntas: [
         "¿Qué tan fácil es acceder a Compartir Conocimientos y explorar los contenidos de los libros web?",
         "¿Qué tan fácil es navegar en tus clases y hacer las tareas usando un celular o tableta?",
@@ -40,14 +40,8 @@ let configEncuesta = {
     ]
 };
 
-// Etiquetas cortas para el gráfico global
-const chartLabels = [
-    "Acceso/Libros", 
-    "Uso Móvil/Tablet", 
-    "Notificaciones", 
-    "Enviar Tareas", 
-    "Progreso/Notas"
-];
+// Generador dinámico de etiquetas para gráficos basado en la cantidad de preguntas actuales
+const getDynamicChartLabels = () => configEncuesta.preguntas.map((_, i) => `P${i + 1}`);
 
 // --- CARGAR CONFIGURACIÓN DESDE FIREBASE ---
 async function loadSurveyConfig() {
@@ -57,7 +51,6 @@ async function loadSurveyConfig() {
         if (docSnap.exists()) {
             configEncuesta = docSnap.data();
         } else {
-            // Si el documento no existe, lo creamos con los valores por defecto
             await setDoc(docRef, configEncuesta);
         }
         verificarDisponibilidad();
@@ -65,7 +58,7 @@ async function loadSurveyConfig() {
         initSurvey();
     } catch (e) {
         console.error("Error cargando configuración de la encuesta", e);
-        initSurvey(); // Renderizamos con fallback si falla
+        initSurvey(); 
     }
 }
 
@@ -74,7 +67,6 @@ function verificarDisponibilidad() {
     const inicio = new Date(configEncuesta.fechaInicio);
     const fin = new Date(configEncuesta.fechaFin);
     
-    // Validar si está activa y en rango de fechas
     const estaDisponible = configEncuesta.activa && (ahora >= inicio && ahora <= fin);
     
     const searchInput = document.getElementById('school-search');
@@ -89,7 +81,7 @@ function verificarDisponibilidad() {
 
 // --- NAVEGACIÓN ---
 const showPage = (id) => {
-    document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+    document.querySelectorAll('main > section, #app > section').forEach(s => s.classList.add('hidden'));
     document.getElementById(id).classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
@@ -215,12 +207,12 @@ function resetApp() {
     document.getElementById('btn-start').classList.add('opacity-50', 'cursor-not-allowed');
     document.getElementById('btn-submit').innerText = "Finalizar Encuesta";
     document.getElementById('btn-submit').disabled = false;
-    verificarDisponibilidad(); // Volvemos a validar si sigue activa
+    verificarDisponibilidad(); 
     initSurvey();
     showPage('welcome-page');
 }
 
-// --- 4. IMPORTAR COLEGIOS ---
+// --- 4. IMPORTAR EXCEL ---
 document.getElementById('excel-import').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return; 
@@ -262,14 +254,14 @@ document.getElementById('excel-import').addEventListener('change', (e) => {
     reader.readAsArrayBuffer(file);
 });
 
-// --- 5. MOTOR DEL DASHBOARD INTERACTIVO ---
-
+// --- 5. MOTOR DEL DASHBOARD ---
 Chart.defaults.font.family = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 Chart.defaults.color = '#94a3b8'; 
 
 const calcularPromedioDoc = (respuestas) => {
     let sum = 0; let count = 0;
-    for(let i = 0; i < configEncuesta.preguntas.length; i++) {
+    const maxQ = Math.max(configEncuesta.preguntas.length, Object.keys(respuestas).length);
+    for(let i = 0; i < maxQ; i++) {
         if(respuestas[i]) { sum += respuestas[i]; count++; }
     }
     return count > 0 ? (sum / count) : 0;
@@ -287,23 +279,17 @@ async function loadDashboardData() {
 }
 
 function renderEmptyCharts() {
-    // 1. Gráfico Global vacío
+    const labels = getDynamicChartLabels();
+    const zeros = new Array(labels.length).fill(0);
+
     const ctxGlobal = document.getElementById('chartGlobal').getContext('2d');
     if(chartInstances['chartGlobal']) chartInstances['chartGlobal'].destroy();
     chartInstances['chartGlobal'] = new Chart(ctxGlobal, {
         type: 'line',
-        data: {
-            labels: chartLabels,
-            datasets: [{
-                data: [0, 0, 0, 0, 0],
-                borderColor: '#94a3b8', backgroundColor: 'rgba(148, 163, 184, 0.1)', borderWidth: 2,
-                tension: 0.4, fill: true, pointRadius: 0
-            }]
-        },
+        data: { labels: labels, datasets: [{ data: zeros, borderColor: '#94a3b8', backgroundColor: 'rgba(148, 163, 184, 0.1)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 0 }] },
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5 }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
     });
 
-    // 2. Gráfico Regional vacío
     const ctxReg = document.getElementById('chartRegional').getContext('2d');
     if(chartInstances['chartRegional']) chartInstances['chartRegional'].destroy();
     chartInstances['chartRegional'] = new Chart(ctxReg, {
@@ -312,7 +298,6 @@ function renderEmptyCharts() {
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5 }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
     });
 
-    // 3. Gráfico Línea de Negocio vacío
     const ctxLin = document.getElementById('chartLinea').getContext('2d');
     if(chartInstances['chartLinea']) chartInstances['chartLinea'].destroy();
     chartInstances['chartLinea'] = new Chart(ctxLin, {
@@ -329,7 +314,7 @@ function updateDashboardView() {
     if (total === 0) {
         document.getElementById('stat-avg').innerText = "0.0";
         document.getElementById('table-surveys').innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-500">No hay datos registrados</td></tr>';
-        renderEmptyCharts(); // Renderiza gráficos en 0%
+        renderEmptyCharts();
         return;
     }
 
@@ -344,136 +329,57 @@ function updateDashboardView() {
     const globalAvg = (promediosPreguntas.reduce((a,b)=>a+b,0) / configEncuesta.preguntas.length).toFixed(1);
     document.getElementById('stat-avg').innerText = globalAvg;
 
-    // --- 1. Gráfico Global ---
     const ctxGlobal = document.getElementById('chartGlobal').getContext('2d');
     if(chartInstances['chartGlobal']) chartInstances['chartGlobal'].destroy();
-    
     let gradientBlue = ctxGlobal.createLinearGradient(0, 0, 0, 300);
-    gradientBlue.addColorStop(0, 'rgba(59, 130, 246, 0.4)'); 
-    gradientBlue.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+    gradientBlue.addColorStop(0, 'rgba(59, 130, 246, 0.4)'); gradientBlue.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
 
     chartInstances['chartGlobal'] = new Chart(ctxGlobal, {
         type: 'line',
         data: {
-            labels: chartLabels,
+            labels: getDynamicChartLabels(),
             datasets: [{
                 data: promediosPreguntas.map(v=>v.toFixed(2)),
                 borderColor: '#3b82f6', backgroundColor: gradientBlue, borderWidth: 4,
-                tension: 0.4, fill: true,
-                pointBackgroundColor: '#ffffff', pointBorderColor: '#3b82f6', pointBorderWidth: 3,
-                pointRadius: 6, pointHoverRadius: 8
+                tension: 0.4, fill: true, pointBackgroundColor: '#ffffff', pointBorderColor: '#3b82f6', pointBorderWidth: 3, pointRadius: 6, pointHoverRadius: 8
             }]
         },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            scales: {
-                y: { min: 0, max: 5, grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false } },
-                x: { grid: { display: false, drawBorder: false } }
-            },
-            plugins: { legend: { display: false } }
-        }
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5, grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false } }, x: { grid: { display: false, drawBorder: false } } }, plugins: { legend: { display: false } } }
     });
 
-    // --- 2. Gráfico Regional ---
-    const regMap = {};
-    allResponses.forEach(r => {
-        let reg = r.regional;
-        if (!reg || reg.trim() === "") reg = "Sin asignar";
-        else reg = reg.trim();
+    const renderBarChart = (mapData, elementId, colorClass, gradientStart, gradientEnd, borderColor) => {
+        const labels = Object.keys(mapData);
+        const data = labels.map(l => (mapData[l].sum / mapData[l].count).toFixed(2));
+        const ctx = document.getElementById(elementId).getContext('2d');
+        if(chartInstances[elementId]) chartInstances[elementId].destroy();
+        
+        let gradient = ctx.createLinearGradient(0, 0, 0, 200);
+        gradient.addColorStop(0, gradientStart); gradient.addColorStop(1, gradientEnd);
 
+        chartInstances[elementId] = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: labels, datasets: [
+                { type: 'scatter', data: data, backgroundColor: '#ffffff', borderColor: borderColor, borderWidth: 3, pointRadius: 5, hoverRadius: 7 },
+                { type: 'bar', data: data, backgroundColor: gradient, borderRadius: {topLeft: 50, topRight: 50, bottomLeft: 5, bottomRight: 5}, barThickness: 16 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5, grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false }, ticks: { stepSize: 1 } }, x: { grid: { display: false, drawBorder: false }, ticks: { font: { weight: 'bold' }, color: '#475569', maxRotation: 45, minRotation: 45 } } }, plugins: { legend: { display: false } } }
+        });
+    };
+
+    const regMap = {}; const linMap = {};
+    allResponses.forEach(r => {
+        let reg = r.regional || "Sin asignar"; let lin = r.lineaNegocio || "Sin asignar";
         if(!regMap[reg]) regMap[reg] = { sum: 0, count: 0 };
-        regMap[reg].sum += calcularPromedioDoc(r.respuestas_likert);
-        regMap[reg].count++;
-    });
-    
-    const regLabels = Object.keys(regMap);
-    const regData = regLabels.map(l => (regMap[l].sum / regMap[l].count).toFixed(2));
-    
-    const ctxReg = document.getElementById('chartRegional').getContext('2d');
-    if(chartInstances['chartRegional']) chartInstances['chartRegional'].destroy();
-    
-    let gradientFuchsiaBar = ctxReg.createLinearGradient(0, 0, 0, 200);
-    gradientFuchsiaBar.addColorStop(0, 'rgba(236, 72, 153, 0.9)'); 
-    gradientFuchsiaBar.addColorStop(1, 'rgba(217, 70, 239, 0.4)');
-
-    chartInstances['chartRegional'] = new Chart(ctxReg, {
-        type: 'bar',
-        data: {
-            labels: regLabels,
-            datasets: [
-                {
-                    type: 'scatter', 
-                    data: regData,
-                    backgroundColor: '#ffffff', borderColor: '#db2777', borderWidth: 3, pointRadius: 5, hoverRadius: 7
-                },
-                {
-                    type: 'bar', data: regData, backgroundColor: gradientFuchsiaBar,
-                    borderRadius: {topLeft: 50, topRight: 50, bottomLeft: 5, bottomRight: 5},
-                    borderSkipped: false, barThickness: 16
-                }
-            ]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            scales: {
-                y: { min: 0, max: 5, grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false }, ticks: { stepSize: 1 } },
-                x: { grid: { display: false, drawBorder: false }, ticks: { font: { weight: 'bold' }, color: '#475569', maxRotation: 45, minRotation: 45 } }
-            },
-            plugins: { legend: { display: false } }
-        }
-    });
-
-    // --- 3. Gráfico Línea de Negocio ---
-    const linMap = {};
-    allResponses.forEach(r => {
-        let lin = r.lineaNegocio;
-        if (!lin || lin.trim() === "") lin = "Sin asignar";
-        else lin = lin.trim();
-
         if(!linMap[lin]) linMap[lin] = { sum: 0, count: 0 };
-        linMap[lin].sum += calcularPromedioDoc(r.respuestas_likert);
-        linMap[lin].count++;
-    });
-    
-    const linLabels = Object.keys(linMap);
-    const linData = linLabels.map(l => (linMap[l].sum / linMap[l].count).toFixed(2));
-    
-    const ctxLin = document.getElementById('chartLinea').getContext('2d');
-    if(chartInstances['chartLinea']) chartInstances['chartLinea'].destroy();
-
-    let gradientIndigoBar = ctxLin.createLinearGradient(0, 0, 0, 200);
-    gradientIndigoBar.addColorStop(0, 'rgba(99, 102, 241, 0.9)'); 
-    gradientIndigoBar.addColorStop(1, 'rgba(167, 139, 250, 0.4)');
-
-    chartInstances['chartLinea'] = new Chart(ctxLin, {
-        type: 'bar',
-        data: {
-            labels: linLabels,
-            datasets: [
-                {
-                    type: 'scatter', 
-                    data: linData,
-                    backgroundColor: '#ffffff', borderColor: '#4f46e5', borderWidth: 3, pointRadius: 5, hoverRadius: 7
-                },
-                {
-                    type: 'bar', data: linData, backgroundColor: gradientIndigoBar,
-                    borderRadius: {topLeft: 50, topRight: 50, bottomLeft: 5, bottomRight: 5},
-                    borderSkipped: false, barThickness: 16
-                }
-            ]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            scales: {
-                y: { min: 0, max: 5, grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false }, ticks: { stepSize: 1 } },
-                x: { grid: { display: false, drawBorder: false }, ticks: { font: { weight: 'bold' }, color: '#475569' } }
-            },
-            plugins: { legend: { display: false } }
-        }
+        const val = calcularPromedioDoc(r.respuestas_likert);
+        regMap[reg].sum += val; regMap[reg].count++;
+        linMap[lin].sum += val; linMap[lin].count++;
     });
 
-    displayLimit = 10;
-    renderTable();
+    renderBarChart(regMap, 'chartRegional', '', 'rgba(236, 72, 153, 0.9)', 'rgba(217, 70, 239, 0.4)', '#db2777');
+    renderBarChart(linMap, 'chartLinea', '', 'rgba(99, 102, 241, 0.9)', 'rgba(167, 139, 250, 0.4)', '#4f46e5');
+
+    displayLimit = 10; renderTable();
 }
 
 function renderTable() {
@@ -484,7 +390,6 @@ function renderTable() {
 
     toShow.forEach(c => {
         const avg = calcularPromedioDoc(c.respuestas_likert).toFixed(1);
-        
         let colorClass = "bg-green-100 text-green-700 border-green-200"; 
         if (avg <= 3.9) colorClass = "bg-red-100 text-red-700 border-red-200";
         else if (avg >= 4.0 && avg <= 4.3) colorClass = "bg-orange-100 text-orange-700 border-orange-200";
@@ -508,57 +413,46 @@ function renderTable() {
     });
 
     const btnLoadMore = document.getElementById('btn-load-more');
-    if (allResponses.length > displayLimit) {
-        btnLoadMore.classList.remove('hidden');
-    } else {
-        btnLoadMore.classList.add('hidden');
-    }
+    if (allResponses.length > displayLimit) btnLoadMore.classList.remove('hidden');
+    else btnLoadMore.classList.add('hidden');
 }
 
-document.getElementById('btn-load-more').addEventListener('click', () => {
-    displayLimit += 10;
-    renderTable();
-});
+document.getElementById('btn-load-more').addEventListener('click', () => { displayLimit += 10; renderTable(); });
 
 window.deleteSurvey = async (id) => {
     if(confirm("¿Estás seguro de eliminar esta encuesta?")) {
-        if(confirm("Esta acción es definitiva y borrará los datos de la base. ¿Confirmar?")) {
-            try {
-                await deleteDoc(doc(db, "respuestas", id));
-                loadDashboardData(); 
-            } catch(e) {
-                alert("Error eliminando la encuesta.");
-                console.error(e);
-            }
+        if(confirm("Esta acción es definitiva. ¿Confirmar?")) {
+            try { await deleteDoc(doc(db, "respuestas", id)); loadDashboardData(); } 
+            catch(e) { alert("Error eliminando."); console.error(e); }
         }
     }
 };
 
-// --- 6. EXPORTAR A EXCEL ---
+// --- EXPORTAR ---
 document.getElementById('btn-export').addEventListener('click', async () => {
-    if (allResponses.length === 0) { alert("No hay datos para exportar."); return; }
-    
-    const dataToExport = allResponses.map(data => ({
-        "Fecha": new Date(data.fecha).toLocaleString(),
-        "Regional": data.regional,
-        "Colegio": data.colegio_nombre,
-        "Línea de Negocio": data.lineaNegocio,
-        "Clasificación": data.clasificacion,
-        "Coach": data.coach,
-        "P1. Acceso/Libros": data.respuestas_likert[0] || "",
-        "P2. Uso Móvil/Tablet": data.respuestas_likert[1] || "",
-        "P3. Notificaciones": data.respuestas_likert[2] || "",
-        "P4. Enviar Tareas": data.respuestas_likert[3] || "", 
-        "P5. Progreso/Notas": data.respuestas_likert[4] || "",
-        "Sugerencias": data.comentario_abierto
-    }));
+    if (allResponses.length === 0) { alert("No hay datos."); return; }
+    const dataToExport = allResponses.map(data => {
+        let obj = {
+            "Fecha": new Date(data.fecha).toLocaleString(),
+            "Regional": data.regional,
+            "Colegio": data.colegio_nombre,
+            "Línea de Negocio": data.lineaNegocio,
+            "Clasificación": data.clasificacion,
+            "Coach": data.coach
+        };
+        for(let i=0; i<configEncuesta.preguntas.length; i++) {
+            obj[`P${i+1}`] = data.respuestas_likert[i] || "";
+        }
+        obj["Sugerencias"] = data.comentario_abierto;
+        return obj;
+    });
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Resultados Estudiantes");
     XLSX.writeFile(wb, "Dashboard_Estudiantes.xlsx");
 });
 
-// --- LÓGICA DE BOTONES DE ADMINISTRACIÓN (Lanzar/Editar Encuesta) ---
+// --- LÓGICA DE ADMINISTRACIÓN Y MODAL ---
 function actualizarBotonEstadoAdmin() {
     const btn = document.getElementById('btn-toggle-survey');
     if (!btn) return;
@@ -584,40 +478,102 @@ document.getElementById('btn-toggle-survey')?.addEventListener('click', async ()
         verificarDisponibilidad();
         alert(nuevoEstado ? "Encuesta lanzada al público correctamente." : "Encuesta detenida.");
     } catch (error) {
-        console.error("Error cambiando estado de encuesta", error);
-        alert("Ocurrió un error al cambiar el estado de la encuesta.");
+        alert("Ocurrió un error al cambiar el estado.");
     }
 });
 
-document.getElementById('btn-edit-survey')?.addEventListener('click', async () => {
-    if (configEncuesta.activa) {
-        alert("Para proteger la integridad de los datos, debes 'Detener la Encuesta' antes de poder editar las preguntas.");
+// VARIABLES MODAL
+const modal = document.getElementById('modal-edit-survey');
+const modalContainer = document.getElementById('modal-questions-container');
+let preguntasTemporales = [];
+
+function renderModalQuestions() {
+    modalContainer.innerHTML = '';
+    if(preguntasTemporales.length === 0) {
+        modalContainer.innerHTML = '<p class="text-sm text-slate-500 text-center py-4">No hay preguntas. Añade una nueva.</p>';
         return;
     }
     
-    let nuevasPreguntas = [];
-    for(let i = 0; i < configEncuesta.preguntas.length; i++) {
-        let p = prompt(`Edita la pregunta ${i+1}:`, configEncuesta.preguntas[i]);
-        if (p === null) {
-            alert("Edición de preguntas cancelada.");
-            return; // Abortar si cancela
-        }
-        if (p.trim() !== '') {
-            nuevasPreguntas.push(p.trim());
-        } else {
-            alert("La pregunta no puede estar vacía. Edición cancelada.");
-            return;
-        }
+    preguntasTemporales.forEach((q, index) => {
+        const div = document.createElement('div');
+        div.className = "flex gap-3 items-start group";
+        div.innerHTML = `
+            <div class="mt-2 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">${index + 1}</div>
+            <textarea class="flex-grow p-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 resize-none transition shadow-sm text-sm" rows="2" data-index="${index}">${q}</textarea>
+            <button class="btn-delete-q text-slate-300 hover:text-red-500 p-2 transition mt-1" data-index="${index}" title="Eliminar pregunta">
+                <svg class="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+        `;
+        modalContainer.appendChild(div);
+    });
+
+    // Guardar cambios al teclear
+    modalContainer.querySelectorAll('textarea').forEach(ta => {
+        ta.addEventListener('input', (e) => {
+            preguntasTemporales[e.target.dataset.index] = e.target.value;
+        });
+    });
+
+    // Eliminar
+    modalContainer.querySelectorAll('.btn-delete-q').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = e.target.dataset.index;
+            preguntasTemporales.splice(idx, 1);
+            renderModalQuestions();
+        });
+    });
+}
+
+function openModal() {
+    preguntasTemporales = [...configEncuesta.preguntas]; // Clonar para editar sin afectar base
+    renderModalQuestions();
+    modal.classList.remove('hidden');
+}
+function closeModal() { modal.classList.add('hidden'); }
+
+document.getElementById('btn-edit-survey')?.addEventListener('click', () => {
+    if (configEncuesta.activa) {
+        alert("Debes 'Detener la Encuesta' primero para poder editarla de forma segura.");
+        return;
     }
+    openModal();
+});
+
+document.getElementById('btn-add-question').addEventListener('click', () => {
+    preguntasTemporales.push("");
+    renderModalQuestions();
+    // Scroll down
+    setTimeout(() => { modalContainer.scrollTop = modalContainer.scrollHeight; }, 100);
+});
+
+document.getElementById('btn-close-modal-x').addEventListener('click', closeModal);
+document.getElementById('btn-cancel-edit').addEventListener('click', closeModal);
+
+document.getElementById('btn-save-edit').addEventListener('click', async () => {
+    // Limpiar espacios vacíos
+    const preguntasLimpias = preguntasTemporales.map(p => p.trim()).filter(p => p !== "");
     
+    if (preguntasLimpias.length === 0) {
+        alert("La encuesta debe tener al menos una pregunta.");
+        return;
+    }
+
     try {
-        await updateDoc(doc(db, "configuracion", "encuesta_activa"), { preguntas: nuevasPreguntas });
-        configEncuesta.preguntas = nuevasPreguntas;
+        const btnSave = document.getElementById('btn-save-edit');
+        btnSave.innerText = "Guardando..."; btnSave.disabled = true;
+        
+        await updateDoc(doc(db, "configuracion", "encuesta_activa"), { preguntas: preguntasLimpias });
+        configEncuesta.preguntas = preguntasLimpias;
         initSurvey();
-        alert("¡Preguntas actualizadas exitosamente en la base de datos!");
+        updateDashboardView(); // Actualiza etiquetas P1, P2...
+        closeModal();
+        
+        btnSave.innerText = "Guardar en Base de Datos"; btnSave.disabled = false;
     } catch(e) {
         console.error(e);
-        alert("Error al guardar las preguntas en Firebase.");
+        alert("Error al guardar en Firebase.");
+        document.getElementById('btn-save-edit').innerText = "Guardar en Base de Datos"; 
+        document.getElementById('btn-save-edit').disabled = false;
     }
 });
 
@@ -644,4 +600,4 @@ document.getElementById('btn-login').onclick = () => {
 // Iniciar app
 showPage('welcome-page');
 loadSchoolsFromFirebase();
-loadSurveyConfig(); // Esto también inicializa initSurvey() internamente tras cargar Firebase
+loadSurveyConfig();
