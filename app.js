@@ -1,6 +1,6 @@
-// Importamos Firebase Modular (SDK v10) manteniendo CDN para HTML puro
+// Importamos Firebase Modular (SDK v10)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, writeBatch, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, writeBatch, doc, deleteDoc, getDoc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.18.5/package/xlsx.mjs";
 
 // Credenciales de Firebase para Estudiantes
@@ -26,14 +26,19 @@ let allResponses = [];
 let chartInstances = {}; 
 let displayLimit = 10;
 
-// Preguntas definitivas
-const questions = [
-    "¿Qué tan fácil es acceder a Compartir Conocimientos y explorar los contenidos de los libros web?",
-    "¿Qué tan fácil es navegar en tus clases y hacer las tareas usando un celular o tableta?",
-    "¿Qué tan fácil es darte cuenta cuando tienes una tarea nueva o una notificación por parte de tus docentes?",
-    "Una vez que terminas tu tarea, ¿qué tan fácil es subirla o enviarla por la plataforma?",
-    "¿Qué tan fácil es ver qué tareas ya terminaste y cuáles fueron tus calificaciones?"
-];
+// Configuración de la encuesta en tiempo real
+let configEncuesta = {
+    activa: false,
+    fechaInicio: new Date().toISOString(), 
+    fechaFin: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // Por defecto, 1 año
+    preguntas: [
+        "¿Qué tan fácil es acceder a Compartir Conocimientos y explorar los contenidos de los libros web?",
+        "¿Qué tan fácil es navegar en tus clases y hacer las tareas usando un celular o tableta?",
+        "¿Qué tan fácil es darte cuenta cuando tienes una tarea nueva o una notificación por parte de tus docentes?",
+        "Una vez que terminas tu tarea, ¿qué tan fácil es subirla o enviarla por la plataforma?",
+        "¿Qué tan fácil es ver qué tareas ya terminaste y cuáles fueron tus calificaciones?"
+    ]
+};
 
 // Etiquetas cortas para el gráfico global
 const chartLabels = [
@@ -43,6 +48,44 @@ const chartLabels = [
     "Enviar Tareas", 
     "Progreso/Notas"
 ];
+
+// --- CARGAR CONFIGURACIÓN DESDE FIREBASE ---
+async function loadSurveyConfig() {
+    try {
+        const docRef = doc(db, "configuracion", "encuesta_activa");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            configEncuesta = docSnap.data();
+        } else {
+            // Si el documento no existe, lo creamos con los valores por defecto
+            await setDoc(docRef, configEncuesta);
+        }
+        verificarDisponibilidad();
+        actualizarBotonEstadoAdmin();
+        initSurvey();
+    } catch (e) {
+        console.error("Error cargando configuración de la encuesta", e);
+        initSurvey(); // Renderizamos con fallback si falla
+    }
+}
+
+function verificarDisponibilidad() {
+    const ahora = new Date();
+    const inicio = new Date(configEncuesta.fechaInicio);
+    const fin = new Date(configEncuesta.fechaFin);
+    
+    // Validar si está activa y en rango de fechas
+    const estaDisponible = configEncuesta.activa && (ahora >= inicio && ahora <= fin);
+    
+    const searchInput = document.getElementById('school-search');
+    if (!estaDisponible) {
+        searchInput.disabled = true;
+        searchInput.placeholder = "La encuesta se encuentra cerrada en este momento.";
+    } else {
+        searchInput.disabled = false;
+        searchInput.placeholder = "Escribe el nombre de tu institución...";
+    }
+}
 
 // --- NAVEGACIÓN ---
 const showPage = (id) => {
@@ -55,7 +98,7 @@ const showPage = (id) => {
 function initSurvey() {
     const container = document.getElementById('questions-container');
     container.innerHTML = ''; 
-    questions.forEach((q, idx) => {
+    configEncuesta.preguntas.forEach((q, idx) => {
         const div = document.createElement('div');
         div.className = "glass-card p-6 rounded-2xl";
         div.innerHTML = `
@@ -133,7 +176,7 @@ btnStart.addEventListener('click', () => {
 
 // --- 3. ENVIAR ENCUESTA ---
 document.getElementById('btn-submit').addEventListener('click', async () => {
-    if (Object.keys(answers).length < questions.length) {
+    if (Object.keys(answers).length < configEncuesta.preguntas.length) {
         alert("Por favor, califica todas las preguntas antes de finalizar.");
         return;
     }
@@ -172,6 +215,7 @@ function resetApp() {
     document.getElementById('btn-start').classList.add('opacity-50', 'cursor-not-allowed');
     document.getElementById('btn-submit').innerText = "Finalizar Encuesta";
     document.getElementById('btn-submit').disabled = false;
+    verificarDisponibilidad(); // Volvemos a validar si sigue activa
     initSurvey();
     showPage('welcome-page');
 }
@@ -223,10 +267,9 @@ document.getElementById('excel-import').addEventListener('change', (e) => {
 Chart.defaults.font.family = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 Chart.defaults.color = '#94a3b8'; 
 
-// Función segura para calcular el promedio de una sola encuesta
 const calcularPromedioDoc = (respuestas) => {
     let sum = 0; let count = 0;
-    for(let i = 0; i < questions.length; i++) {
+    for(let i = 0; i < configEncuesta.preguntas.length; i++) {
         if(respuestas[i]) { sum += respuestas[i]; count++; }
     }
     return count > 0 ? (sum / count) : 0;
@@ -243,28 +286,62 @@ async function loadDashboardData() {
     }
 }
 
+function renderEmptyCharts() {
+    // 1. Gráfico Global vacío
+    const ctxGlobal = document.getElementById('chartGlobal').getContext('2d');
+    if(chartInstances['chartGlobal']) chartInstances['chartGlobal'].destroy();
+    chartInstances['chartGlobal'] = new Chart(ctxGlobal, {
+        type: 'line',
+        data: {
+            labels: chartLabels,
+            datasets: [{
+                data: [0, 0, 0, 0, 0],
+                borderColor: '#94a3b8', backgroundColor: 'rgba(148, 163, 184, 0.1)', borderWidth: 2,
+                tension: 0.4, fill: true, pointRadius: 0
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5 }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
+    });
+
+    // 2. Gráfico Regional vacío
+    const ctxReg = document.getElementById('chartRegional').getContext('2d');
+    if(chartInstances['chartRegional']) chartInstances['chartRegional'].destroy();
+    chartInstances['chartRegional'] = new Chart(ctxReg, {
+        type: 'bar',
+        data: { labels: ['Sin datos'], datasets: [{ data: [0], backgroundColor: '#e2e8f0', borderRadius: 5 }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5 }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
+    });
+
+    // 3. Gráfico Línea de Negocio vacío
+    const ctxLin = document.getElementById('chartLinea').getContext('2d');
+    if(chartInstances['chartLinea']) chartInstances['chartLinea'].destroy();
+    chartInstances['chartLinea'] = new Chart(ctxLin, {
+        type: 'bar',
+        data: { labels: ['Sin datos'], datasets: [{ data: [0], backgroundColor: '#e2e8f0', borderRadius: 5 }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5 }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
+    });
+}
+
 function updateDashboardView() {
     const total = allResponses.length;
     document.getElementById('stat-total').innerText = total;
 
     if (total === 0) {
         document.getElementById('stat-avg').innerText = "0.0";
-        if(chartInstances['chartGlobal']) chartInstances['chartGlobal'].destroy();
-        if(chartInstances['chartRegional']) chartInstances['chartRegional'].destroy();
-        if(chartInstances['chartLinea']) chartInstances['chartLinea'].destroy();
         document.getElementById('table-surveys').innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-500">No hay datos registrados</td></tr>';
+        renderEmptyCharts(); // Renderiza gráficos en 0%
         return;
     }
 
-    let sumasPreguntas = new Array(questions.length).fill(0);
+    let sumasPreguntas = new Array(configEncuesta.preguntas.length).fill(0);
     allResponses.forEach(r => {
-        for(let i = 0; i < questions.length; i++) { 
+        for(let i = 0; i < configEncuesta.preguntas.length; i++) { 
             sumasPreguntas[i] += r.respuestas_likert[i] || 0; 
         }
     });
 
     const promediosPreguntas = sumasPreguntas.map(s => s / total);
-    const globalAvg = (promediosPreguntas.reduce((a,b)=>a+b,0) / questions.length).toFixed(1);
+    const globalAvg = (promediosPreguntas.reduce((a,b)=>a+b,0) / configEncuesta.preguntas.length).toFixed(1);
     document.getElementById('stat-avg').innerText = globalAvg;
 
     // --- 1. Gráfico Global ---
@@ -297,7 +374,7 @@ function updateDashboardView() {
         }
     });
 
-    // --- 2. Gráfico Regional (DINÁMICO) ---
+    // --- 2. Gráfico Regional ---
     const regMap = {};
     allResponses.forEach(r => {
         let reg = r.regional;
@@ -395,7 +472,6 @@ function updateDashboardView() {
         }
     });
 
-    // Resetear paginación y pintar la tabla
     displayLimit = 10;
     renderTable();
 }
@@ -409,7 +485,6 @@ function renderTable() {
     toShow.forEach(c => {
         const avg = calcularPromedioDoc(c.respuestas_likert).toFixed(1);
         
-        // Colores condicionales
         let colorClass = "bg-green-100 text-green-700 border-green-200"; 
         if (avg <= 3.9) colorClass = "bg-red-100 text-red-700 border-red-200";
         else if (avg >= 4.0 && avg <= 4.3) colorClass = "bg-orange-100 text-orange-700 border-orange-200";
@@ -461,7 +536,7 @@ window.deleteSurvey = async (id) => {
 
 // --- 6. EXPORTAR A EXCEL ---
 document.getElementById('btn-export').addEventListener('click', async () => {
-    if (allResponses.length === 0) { alert("No hay datos."); return; }
+    if (allResponses.length === 0) { alert("No hay datos para exportar."); return; }
     
     const dataToExport = allResponses.map(data => ({
         "Fecha": new Date(data.fecha).toLocaleString(),
@@ -482,6 +557,70 @@ document.getElementById('btn-export').addEventListener('click', async () => {
     XLSX.utils.book_append_sheet(wb, ws, "Resultados Estudiantes");
     XLSX.writeFile(wb, "Dashboard_Estudiantes.xlsx");
 });
+
+// --- LÓGICA DE BOTONES DE ADMINISTRACIÓN (Lanzar/Editar Encuesta) ---
+function actualizarBotonEstadoAdmin() {
+    const btn = document.getElementById('btn-toggle-survey');
+    if (!btn) return;
+    if (configEncuesta.activa) {
+        btn.innerText = "Detener Encuesta";
+        btn.classList.replace('bg-slate-200', 'bg-red-500');
+        btn.classList.replace('text-slate-700', 'text-white');
+        btn.classList.replace('hover:bg-slate-300', 'hover:bg-red-600');
+    } else {
+        btn.innerText = "Lanzar Encuesta";
+        btn.classList.replace('bg-red-500', 'bg-slate-200');
+        btn.classList.replace('text-white', 'text-slate-700');
+        btn.classList.replace('hover:bg-red-600', 'hover:bg-slate-300');
+    }
+}
+
+document.getElementById('btn-toggle-survey')?.addEventListener('click', async () => {
+    const nuevoEstado = !configEncuesta.activa;
+    try {
+        await updateDoc(doc(db, "configuracion", "encuesta_activa"), { activa: nuevoEstado });
+        configEncuesta.activa = nuevoEstado;
+        actualizarBotonEstadoAdmin();
+        verificarDisponibilidad();
+        alert(nuevoEstado ? "Encuesta lanzada al público correctamente." : "Encuesta detenida.");
+    } catch (error) {
+        console.error("Error cambiando estado de encuesta", error);
+        alert("Ocurrió un error al cambiar el estado de la encuesta.");
+    }
+});
+
+document.getElementById('btn-edit-survey')?.addEventListener('click', async () => {
+    if (configEncuesta.activa) {
+        alert("Para proteger la integridad de los datos, debes 'Detener la Encuesta' antes de poder editar las preguntas.");
+        return;
+    }
+    
+    let nuevasPreguntas = [];
+    for(let i = 0; i < configEncuesta.preguntas.length; i++) {
+        let p = prompt(`Edita la pregunta ${i+1}:`, configEncuesta.preguntas[i]);
+        if (p === null) {
+            alert("Edición de preguntas cancelada.");
+            return; // Abortar si cancela
+        }
+        if (p.trim() !== '') {
+            nuevasPreguntas.push(p.trim());
+        } else {
+            alert("La pregunta no puede estar vacía. Edición cancelada.");
+            return;
+        }
+    }
+    
+    try {
+        await updateDoc(doc(db, "configuracion", "encuesta_activa"), { preguntas: nuevasPreguntas });
+        configEncuesta.preguntas = nuevasPreguntas;
+        initSurvey();
+        alert("¡Preguntas actualizadas exitosamente en la base de datos!");
+    } catch(e) {
+        console.error(e);
+        alert("Error al guardar las preguntas en Firebase.");
+    }
+});
+
 
 // --- ADMIN LOGIN ---
 document.getElementById('btn-show-admin').onclick = () => showPage('admin-login');
@@ -504,5 +643,5 @@ document.getElementById('btn-login').onclick = () => {
 
 // Iniciar app
 showPage('welcome-page');
-initSurvey();
 loadSchoolsFromFirebase();
+loadSurveyConfig(); // Esto también inicializa initSurvey() internamente tras cargar Firebase
