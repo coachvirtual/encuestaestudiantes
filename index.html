@@ -231,6 +231,35 @@
         </section>
     </div>
 
+    <div id="modal-edit-survey" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh] transform transition-all">
+            
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div>
+                    <h3 class="text-xl font-bold text-[#0f172a]">Editar Preguntas</h3>
+                    <p class="text-xs text-slate-500 mt-1">Añade, edita o elimina preguntas de la encuesta.</p>
+                </div>
+                <button id="btn-close-modal-x" class="text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div id="modal-questions-container" class="p-6 overflow-y-auto flex-grow space-y-4 bg-slate-50/30">
+                </div>
+            
+            <div class="p-5 border-t border-slate-100 flex justify-between items-center bg-white">
+                <button id="btn-add-question" class="text-fuchsia-600 font-bold hover:text-fuchsia-700 flex items-center gap-2 text-sm px-4 py-2 rounded-xl hover:bg-fuchsia-50 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    Añadir Pregunta
+                </button>
+                <div class="flex gap-3">
+                    <button id="btn-cancel-edit" class="px-6 py-2.5 rounded-xl text-slate-500 font-bold hover:bg-slate-100 transition text-sm">Cancelar</button>
+                    <button id="btn-save-edit" class="px-6 py-2.5 rounded-xl bg-[#0f172a] text-white font-bold shadow-lg hover:bg-slate-800 transition text-sm">Guardar en Base de Datos</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="./app.js"></script>
     <script>
         const observer = new MutationObserver(function(mutations) {
