@@ -3,7 +3,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebas
 import { getFirestore, collection, addDoc, getDocs, writeBatch, doc, deleteDoc, getDoc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.18.5/package/xlsx.mjs";
 
-// Credenciales de Firebase para Estudiantes
 const firebaseConfig = {
   apiKey: "AIzaSyD1x1CTKPw_rShy2jOoWCMWXwU6_kcXxDk",
   authDomain: "encuesta-compartir-estudiantes.firebaseapp.com",
@@ -26,22 +25,27 @@ let allResponses = [];
 let chartInstances = {}; 
 let displayLimit = 10;
 
-// Configuración de la encuesta en tiempo real
+// Configuración base (formato objeto)
 let configEncuesta = {
     activa: false,
     fechaInicio: new Date().toISOString(), 
     fechaFin: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
     preguntas: [
-        "¿Qué tan fácil es acceder a Compartir Conocimientos y explorar los contenidos de los libros web?",
-        "¿Qué tan fácil es navegar en tus clases y hacer las tareas usando un celular o tableta?",
-        "¿Qué tan fácil es darte cuenta cuando tienes una tarea nueva o una notificación por parte de tus docentes?",
-        "Una vez que terminas tu tarea, ¿qué tan fácil es subirla o enviarla por la plataforma?",
-        "¿Qué tan fácil es ver qué tareas ya terminaste y cuáles fueron tus calificaciones?"
+        { tipo: 'likert', texto: "¿Qué tan fácil es acceder a Compartir Conocimientos y explorar los contenidos de los libros web?" },
+        { tipo: 'likert', texto: "¿Qué tan fácil es navegar en tus clases y hacer las tareas usando un celular o tableta?" },
+        { tipo: 'likert', texto: "¿Qué tan fácil es darte cuenta cuando tienes una tarea nueva o una notificación por parte de tus docentes?" },
+        { tipo: 'likert', texto: "Una vez que terminas tu tarea, ¿qué tan fácil es subirla o enviarla por la plataforma?" },
+        { tipo: 'likert', texto: "¿Qué tan fácil es ver qué tareas ya terminaste y cuáles fueron tus calificaciones?" }
     ]
 };
 
-// Generador dinámico de etiquetas para gráficos basado en la cantidad de preguntas actuales
-const getDynamicChartLabels = () => configEncuesta.preguntas.map((_, i) => `P${i + 1}`);
+// Solo contamos preguntas Likert para el Dashboard
+const getLikertIndices = () => {
+    let indices = [];
+    configEncuesta.preguntas.forEach((q, i) => { if(q.tipo === 'likert') indices.push(i); });
+    return indices;
+};
+const getDynamicChartLabels = () => getLikertIndices().map(i => `P${i + 1}`);
 
 // --- CARGAR CONFIGURACIÓN DESDE FIREBASE ---
 async function loadSurveyConfig() {
@@ -49,7 +53,12 @@ async function loadSurveyConfig() {
         const docRef = doc(db, "configuracion", "encuesta_activa");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-            configEncuesta = docSnap.data();
+            let data = docSnap.data();
+            // Retrocompatibilidad: convertir strings viejos a objetos likert
+            if(data.preguntas) {
+                data.preguntas = data.preguntas.map(q => typeof q === 'string' ? { texto: q, tipo: 'likert' } : q);
+            }
+            configEncuesta = data;
         } else {
             await setDoc(docRef, configEncuesta);
         }
@@ -57,7 +66,7 @@ async function loadSurveyConfig() {
         actualizarBotonEstadoAdmin();
         initSurvey();
     } catch (e) {
-        console.error("Error cargando configuración de la encuesta", e);
+        console.error("Error cargando configuración", e);
         initSurvey(); 
     }
 }
@@ -66,7 +75,6 @@ function verificarDisponibilidad() {
     const ahora = new Date();
     const inicio = new Date(configEncuesta.fechaInicio);
     const fin = new Date(configEncuesta.fechaFin);
-    
     const estaDisponible = configEncuesta.activa && (ahora >= inicio && ahora <= fin);
     
     const searchInput = document.getElementById('school-search');
@@ -86,32 +94,67 @@ const showPage = (id) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-// --- 1. RENDERIZADO DE LA ENCUESTA ---
+// --- 1. RENDERIZADO DINÁMICO DE LA ENCUESTA ---
 function initSurvey() {
     const container = document.getElementById('questions-container');
     container.innerHTML = ''; 
+    answers = {}; // Reset respuestas
+
     configEncuesta.preguntas.forEach((q, idx) => {
         const div = document.createElement('div');
         div.className = "glass-card p-6 rounded-2xl";
-        div.innerHTML = `
-            <p class="font-bold mb-4 text-[#0f172a]">${idx + 1}. ${q}</p>
-            <div class="flex justify-between gap-2" id="q-${idx}">
-                ${[1,2,3,4,5].map(val => `
-                    <button class="likert-btn flex-1 py-3 rounded-lg font-bold focus:outline-none" data-q="${idx}" data-val="${val}">${val}</button>
+        
+        let html = `<p class="font-bold mb-4 text-[#0f172a]">${idx + 1}. ${q.texto}</p>`;
+        
+        if (q.tipo === 'likert') {
+            html += `<div class="flex justify-between gap-2" id="q-${idx}">
+                ${[1,2,3,4,5].map(val => `<button class="likert-btn flex-1 py-3 rounded-lg font-bold focus:outline-none" data-q="${idx}" data-val="${val}">${val}</button>`).join('')}
+            </div>`;
+        } else if (q.tipo === 'opciones') {
+            html += `<div class="flex flex-col gap-3" id="q-${idx}">
+                ${(q.opciones || []).map(opt => `
+                    <label class="flex items-center gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-fuchsia-50 transition option-label-${idx}">
+                        <input type="radio" name="q-${idx}" value="${opt}" class="w-5 h-5 text-fuchsia-600 focus:ring-fuchsia-500 border-gray-300">
+                        <span class="text-slate-700 font-medium">${opt}</span>
+                    </label>
                 `).join('')}
-            </div>
-        `;
+            </div>`;
+        } else if (q.tipo === 'abierta') {
+            html += `<textarea id="q-${idx}-text" rows="3" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-fuchsia-500 outline-none transition text-slate-700" placeholder="Escribe tu respuesta aquí..."></textarea>`;
+        }
+        
+        div.innerHTML = html;
         container.appendChild(div);
     });
 
+    // Lógica Likert
     document.querySelectorAll('.likert-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const qIdx = e.target.dataset.q;
-            const val = e.target.dataset.val;
-            answers[qIdx] = parseInt(val);
+            answers[qIdx] = parseInt(e.target.dataset.val);
             document.querySelectorAll(`#q-${qIdx} .likert-btn`).forEach(b => b.classList.remove('active'));
             e.target.classList.add('active');
         });
+    });
+
+    // Lógica Opciones
+    configEncuesta.preguntas.forEach((q, idx) => {
+        if (q.tipo === 'opciones') {
+            document.querySelectorAll(`input[name="q-${idx}"]`).forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    answers[idx] = e.target.value;
+                    document.querySelectorAll(`.option-label-${idx}`).forEach(l => {
+                        l.classList.remove('border-fuchsia-500', 'bg-fuchsia-50');
+                    });
+                    e.target.closest('label').classList.add('border-fuchsia-500', 'bg-fuchsia-50');
+                });
+            });
+        } else if (q.tipo === 'abierta') {
+            const ta = document.getElementById(`q-${idx}-text`);
+            if(ta) {
+                ta.addEventListener('input', (e) => answers[idx] = e.target.value.trim());
+            }
+        }
     });
 }
 
@@ -121,9 +164,7 @@ async function loadSchoolsFromFirebase() {
         const querySnapshot = await getDocs(collection(db, "colegios"));
         schools = [];
         querySnapshot.forEach(doc => schools.push({ id: doc.id, ...doc.data() }));
-    } catch (e) {
-        console.error("Error cargando colegios.", e);
-    }
+    } catch (e) { console.error("Error colegios", e); }
 }
 
 const searchInput = document.getElementById('school-search');
@@ -133,8 +174,7 @@ const btnStart = document.getElementById('btn-start');
 searchInput.addEventListener('input', (e) => {
     const val = e.target.value.toLowerCase();
     resultsDiv.innerHTML = '';
-    btnStart.disabled = true;
-    btnStart.classList.add('opacity-50', 'cursor-not-allowed');
+    btnStart.disabled = true; btnStart.classList.add('opacity-50', 'cursor-not-allowed');
     selectedSchool = null;
 
     if(val.length < 2) { resultsDiv.classList.add('hidden'); return; }
@@ -146,14 +186,10 @@ searchInput.addEventListener('input', (e) => {
             d.className = "p-4 hover:bg-fuchsia-50 cursor-pointer border-b border-slate-100 text-sm transition text-slate-700";
             d.innerText = s.nombre;
             d.onclick = () => {
-                selectedSchool = s;
-                searchInput.value = ''; 
-                resultsDiv.classList.add('hidden');
-                const nameDisplay = document.getElementById('selected-school-name');
-                nameDisplay.innerText = "✓ Colegio seleccionado: " + s.nombre;
-                nameDisplay.classList.remove('hidden');
-                btnStart.disabled = false;
-                btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+                selectedSchool = s; searchInput.value = ''; resultsDiv.classList.add('hidden');
+                const n = document.getElementById('selected-school-name');
+                n.innerText = "✓ Colegio seleccionado: " + s.nombre; n.classList.remove('hidden');
+                btnStart.disabled = false; btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
             };
             resultsDiv.appendChild(d);
         });
@@ -168,10 +204,19 @@ btnStart.addEventListener('click', () => {
 
 // --- 3. ENVIAR ENCUESTA ---
 document.getElementById('btn-submit').addEventListener('click', async () => {
-    if (Object.keys(answers).length < configEncuesta.preguntas.length) {
-        alert("Por favor, califica todas las preguntas antes de finalizar.");
+    // Validar que se respondieron todas las preguntas requeridas (Likert y Opciones). Abiertas son opcionales.
+    let faltanRespuestas = false;
+    configEncuesta.preguntas.forEach((q, i) => {
+        if (q.tipo === 'likert' || q.tipo === 'opciones') {
+            if (answers[i] === undefined || answers[i] === "") faltanRespuestas = true;
+        }
+    });
+
+    if (faltanRespuestas) {
+        alert("Por favor, responde todas las preguntas de selección antes de finalizar.");
         return;
     }
+
     const openQuestionText = document.getElementById('open-question').value.trim();
     const submitBtn = document.getElementById('btn-submit');
     submitBtn.innerText = "Enviando..."; submitBtn.disabled = true;
@@ -184,7 +229,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
             lineaNegocio: selectedSchool.lineaNegocio || "Sin asignar",
             clasificacion: selectedSchool.clasificacion || "Sin asignar",
             coach: selectedSchool.coach || "Sin asignar",
-            respuestas_likert: answers,
+            respuestas_likert: answers, // Guarda tanto ints (likert) como strings (opciones/abierta)
             comentario_abierto: openQuestionText || "Sin comentarios",
             fecha: new Date().toISOString()
         };
@@ -192,8 +237,7 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         showPage('thank-you-page');
         setTimeout(() => resetApp(), 3500);
     } catch (e) {
-        console.error(e);
-        alert("Hubo un error al enviar la encuesta.");
+        console.error(e); alert("Error al enviar.");
         submitBtn.innerText = "Finalizar Encuesta"; submitBtn.disabled = false;
     }
 });
@@ -223,33 +267,25 @@ document.getElementById('excel-import').addEventListener('change', (e) => {
             const workbook = XLSX.read(data, {type: 'array'});
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
             const json = XLSX.utils.sheet_to_json(sheet);
-            
-            if(json.length === 0) { alert("Archivo vacío."); return; }
-            alert(`Leyendo ${json.length} colegios. Por favor espera...`);
+            if(json.length === 0) return;
+            alert(`Leyendo ${json.length} colegios...`);
             const batch = writeBatch(db);
-            let registrosAgregados = 0;
-            
+            let n = 0;
             json.forEach(row => {
                 const nombreCol = row.colegio || row.Colegio || row.NombreColegio || row.nombre;
                 if(nombreCol) {
                     const docRef = doc(collection(db, "colegios"));
                     batch.set(docRef, { 
-                        nombre: nombreCol,
-                        regional: row.regional || row.Regional || "",
+                        nombre: nombreCol, regional: row.regional || row.Regional || "",
                         lineaNegocio: row.lineaNegocio || row.LineaNegocio || row["Línea de Negocio"] || "",
-                        clasificacion: row.clasificacion || row.Clasificacion || row.Clasificación || "",
-                        coach: row.coach || row.Coach || ""
+                        clasificacion: row.clasificacion || row.Clasificacion || row.Clasificación || "", coach: row.coach || row.Coach || ""
                     });
-                    registrosAgregados++;
+                    n++;
                 }
             });
-            await batch.commit();
-            alert(`¡Cargados ${registrosAgregados} colegios a la BD!`);
+            await batch.commit(); alert(`¡Cargados ${n} colegios!`);
             e.target.value = ''; loadSchoolsFromFirebase(); 
-        } catch (error) { 
-            console.error(error);
-            alert("Error leyendo el Excel."); 
-        }
+        } catch (error) { alert("Error Excel."); }
     };
     reader.readAsArrayBuffer(file);
 });
@@ -258,12 +294,14 @@ document.getElementById('excel-import').addEventListener('change', (e) => {
 Chart.defaults.font.family = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 Chart.defaults.color = '#94a3b8'; 
 
+// Calcula promedio SOLO para preguntas Likert
 const calcularPromedioDoc = (respuestas) => {
     let sum = 0; let count = 0;
-    const maxQ = Math.max(configEncuesta.preguntas.length, Object.keys(respuestas).length);
-    for(let i = 0; i < maxQ; i++) {
-        if(respuestas[i]) { sum += respuestas[i]; count++; }
-    }
+    configEncuesta.preguntas.forEach((q, i) => {
+        if (q.tipo === 'likert' && respuestas[i] !== undefined && typeof respuestas[i] === 'number') {
+            sum += respuestas[i]; count++;
+        }
+    });
     return count > 0 ? (sum / count) : 0;
 };
 
@@ -273,9 +311,7 @@ async function loadDashboardData() {
         allResponses = [];
         querySnapshot.forEach(doc => allResponses.push({ firestoreId: doc.id, ...doc.data() }));
         updateDashboardView();
-    } catch (e) {
-        console.error("Error cargando dashboard:", e);
-    }
+    } catch (e) { console.error("Error dashboard", e); }
 }
 
 function renderEmptyCharts() {
@@ -286,23 +322,21 @@ function renderEmptyCharts() {
     if(chartInstances['chartGlobal']) chartInstances['chartGlobal'].destroy();
     chartInstances['chartGlobal'] = new Chart(ctxGlobal, {
         type: 'line',
-        data: { labels: labels, datasets: [{ data: zeros, borderColor: '#94a3b8', backgroundColor: 'rgba(148, 163, 184, 0.1)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 0 }] },
+        data: { labels: labels.length ? labels : ['Sin Likert'], datasets: [{ data: labels.length ? zeros : [0], borderColor: '#94a3b8', backgroundColor: 'rgba(148, 163, 184, 0.1)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 0 }] },
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5 }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
     });
 
     const ctxReg = document.getElementById('chartRegional').getContext('2d');
     if(chartInstances['chartRegional']) chartInstances['chartRegional'].destroy();
     chartInstances['chartRegional'] = new Chart(ctxReg, {
-        type: 'bar',
-        data: { labels: ['Sin datos'], datasets: [{ data: [0], backgroundColor: '#e2e8f0', borderRadius: 5 }] },
+        type: 'bar', data: { labels: ['Sin datos'], datasets: [{ data: [0], backgroundColor: '#e2e8f0', borderRadius: 5 }] },
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5 }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
     });
 
     const ctxLin = document.getElementById('chartLinea').getContext('2d');
     if(chartInstances['chartLinea']) chartInstances['chartLinea'].destroy();
     chartInstances['chartLinea'] = new Chart(ctxLin, {
-        type: 'bar',
-        data: { labels: ['Sin datos'], datasets: [{ data: [0], backgroundColor: '#e2e8f0', borderRadius: 5 }] },
+        type: 'bar', data: { labels: ['Sin datos'], datasets: [{ data: [0], backgroundColor: '#e2e8f0', borderRadius: 5 }] },
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5 }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } }
     });
 }
@@ -314,20 +348,25 @@ function updateDashboardView() {
     if (total === 0) {
         document.getElementById('stat-avg').innerText = "0.0";
         document.getElementById('table-surveys').innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-500">No hay datos registrados</td></tr>';
-        renderEmptyCharts();
-        return;
+        renderEmptyCharts(); return;
     }
 
-    let sumasPreguntas = new Array(configEncuesta.preguntas.length).fill(0);
+    const likertIdx = getLikertIndices();
+    let sumasPreguntas = new Array(likertIdx.length).fill(0);
+    
     allResponses.forEach(r => {
-        for(let i = 0; i < configEncuesta.preguntas.length; i++) { 
-            sumasPreguntas[i] += r.respuestas_likert[i] || 0; 
-        }
+        likertIdx.forEach((qIndex, arrayIndex) => {
+            sumasPreguntas[arrayIndex] += (r.respuestas_likert[qIndex] || 0);
+        });
     });
 
-    const promediosPreguntas = sumasPreguntas.map(s => s / total);
-    const globalAvg = (promediosPreguntas.reduce((a,b)=>a+b,0) / configEncuesta.preguntas.length).toFixed(1);
-    document.getElementById('stat-avg').innerText = globalAvg;
+    let globalAvg = 0;
+    let promediosPreguntas = [];
+    if (likertIdx.length > 0) {
+        promediosPreguntas = sumasPreguntas.map(s => s / total);
+        globalAvg = (promediosPreguntas.reduce((a,b)=>a+b,0) / likertIdx.length).toFixed(1);
+    }
+    document.getElementById('stat-avg').innerText = globalAvg || "N/A";
 
     const ctxGlobal = document.getElementById('chartGlobal').getContext('2d');
     if(chartInstances['chartGlobal']) chartInstances['chartGlobal'].destroy();
@@ -337,9 +376,9 @@ function updateDashboardView() {
     chartInstances['chartGlobal'] = new Chart(ctxGlobal, {
         type: 'line',
         data: {
-            labels: getDynamicChartLabels(),
+            labels: likertIdx.length ? getDynamicChartLabels() : ['Sin Likert'],
             datasets: [{
-                data: promediosPreguntas.map(v=>v.toFixed(2)),
+                data: likertIdx.length ? promediosPreguntas.map(v=>v.toFixed(2)) : [0],
                 borderColor: '#3b82f6', backgroundColor: gradientBlue, borderWidth: 4,
                 tension: 0.4, fill: true, pointBackgroundColor: '#ffffff', pointBorderColor: '#3b82f6', pointBorderWidth: 3, pointRadius: 6, pointHoverRadius: 8
             }]
@@ -347,12 +386,11 @@ function updateDashboardView() {
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 5, grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false } }, x: { grid: { display: false, drawBorder: false } } }, plugins: { legend: { display: false } } }
     });
 
-    const renderBarChart = (mapData, elementId, colorClass, gradientStart, gradientEnd, borderColor) => {
+    const renderBarChart = (mapData, elementId, gradientStart, gradientEnd, borderColor) => {
         const labels = Object.keys(mapData);
         const data = labels.map(l => (mapData[l].sum / mapData[l].count).toFixed(2));
         const ctx = document.getElementById(elementId).getContext('2d');
         if(chartInstances[elementId]) chartInstances[elementId].destroy();
-        
         let gradient = ctx.createLinearGradient(0, 0, 0, 200);
         gradient.addColorStop(0, gradientStart); gradient.addColorStop(1, gradientEnd);
 
@@ -376,8 +414,8 @@ function updateDashboardView() {
         linMap[lin].sum += val; linMap[lin].count++;
     });
 
-    renderBarChart(regMap, 'chartRegional', '', 'rgba(236, 72, 153, 0.9)', 'rgba(217, 70, 239, 0.4)', '#db2777');
-    renderBarChart(linMap, 'chartLinea', '', 'rgba(99, 102, 241, 0.9)', 'rgba(167, 139, 250, 0.4)', '#4f46e5');
+    renderBarChart(regMap, 'chartRegional', 'rgba(236, 72, 153, 0.9)', 'rgba(217, 70, 239, 0.4)', '#db2777');
+    renderBarChart(linMap, 'chartLinea', 'rgba(99, 102, 241, 0.9)', 'rgba(167, 139, 250, 0.4)', '#4f46e5');
 
     displayLimit = 10; renderTable();
 }
@@ -421,10 +459,8 @@ document.getElementById('btn-load-more').addEventListener('click', () => { displ
 
 window.deleteSurvey = async (id) => {
     if(confirm("¿Estás seguro de eliminar esta encuesta?")) {
-        if(confirm("Esta acción es definitiva. ¿Confirmar?")) {
-            try { await deleteDoc(doc(db, "respuestas", id)); loadDashboardData(); } 
-            catch(e) { alert("Error eliminando."); console.error(e); }
-        }
+        try { await deleteDoc(doc(db, "respuestas", id)); loadDashboardData(); } 
+        catch(e) { alert("Error eliminando."); }
     }
 };
 
@@ -441,14 +477,14 @@ document.getElementById('btn-export').addEventListener('click', async () => {
             "Coach": data.coach
         };
         for(let i=0; i<configEncuesta.preguntas.length; i++) {
-            obj[`P${i+1}`] = data.respuestas_likert[i] || "";
+            obj[`P${i+1} (${configEncuesta.preguntas[i].tipo})`] = data.respuestas_likert[i] || "";
         }
-        obj["Sugerencias"] = data.comentario_abierto;
+        obj["Sugerencias Grales"] = data.comentario_abierto;
         return obj;
     });
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Resultados Estudiantes");
+    XLSX.utils.book_append_sheet(wb, ws, "Resultados");
     XLSX.writeFile(wb, "Dashboard_Estudiantes.xlsx");
 });
 
@@ -460,12 +496,10 @@ function actualizarBotonEstadoAdmin() {
         btn.innerText = "Detener Encuesta";
         btn.classList.replace('bg-slate-200', 'bg-red-500');
         btn.classList.replace('text-slate-700', 'text-white');
-        btn.classList.replace('hover:bg-slate-300', 'hover:bg-red-600');
     } else {
         btn.innerText = "Lanzar Encuesta";
         btn.classList.replace('bg-red-500', 'bg-slate-200');
         btn.classList.replace('text-white', 'text-slate-700');
-        btn.classList.replace('hover:bg-red-600', 'hover:bg-slate-300');
     }
 }
 
@@ -477,9 +511,7 @@ document.getElementById('btn-toggle-survey')?.addEventListener('click', async ()
         actualizarBotonEstadoAdmin();
         verificarDisponibilidad();
         alert(nuevoEstado ? "Encuesta lanzada al público correctamente." : "Encuesta detenida.");
-    } catch (error) {
-        alert("Ocurrió un error al cambiar el estado.");
-    }
+    } catch (error) { alert("Error al cambiar estado."); }
 });
 
 // VARIABLES MODAL
@@ -490,59 +522,82 @@ let preguntasTemporales = [];
 function renderModalQuestions() {
     modalContainer.innerHTML = '';
     if(preguntasTemporales.length === 0) {
-        modalContainer.innerHTML = '<p class="text-sm text-slate-500 text-center py-4">No hay preguntas. Añade una nueva.</p>';
-        return;
+        modalContainer.innerHTML = '<p class="text-sm text-slate-500 text-center py-4">No hay preguntas.</p>'; return;
     }
     
     preguntasTemporales.forEach((q, index) => {
         const div = document.createElement('div');
-        div.className = "flex gap-3 items-start group";
+        div.className = "flex gap-3 items-start group flex-col bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative";
+        
+        let tipoBadge = q.tipo === 'likert' ? 'Escala 1 a 5' : (q.tipo === 'opciones' ? 'Opción Múltiple' : 'Pregunta Abierta');
+        let colorBadge = q.tipo === 'likert' ? 'bg-blue-100 text-blue-600' : (q.tipo === 'opciones' ? 'bg-fuchsia-100 text-fuchsia-600' : 'bg-orange-100 text-orange-600');
+
+        let optionsHtml = '';
+        if (q.tipo === 'opciones') {
+            optionsHtml = `
+                <div class="mt-3 w-full">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Opciones de Respuesta:</label>
+                    <input type="text" class="w-full mt-1 p-3 text-sm border border-slate-200 bg-slate-50 rounded-xl outline-none focus:ring-2 focus:ring-fuchsia-500 options-input" data-index="${index}" value="${(q.opciones||[]).join(', ')}" placeholder="Ejemplo: Opción 1, Opción 2, Opción 3 (Separa con comas)">
+                </div>`;
+        }
+
         div.innerHTML = `
-            <div class="mt-2 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">${index + 1}</div>
-            <textarea class="flex-grow p-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 resize-none transition shadow-sm text-sm" rows="2" data-index="${index}">${q}</textarea>
-            <button class="btn-delete-q text-slate-300 hover:text-red-500 p-2 transition mt-1" data-index="${index}" title="Eliminar pregunta">
-                <svg class="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            </button>
+            <div class="absolute top-4 right-4 flex gap-2">
+                <span class="text-[10px] font-bold uppercase px-3 py-1 rounded-full ${colorBadge}">${tipoBadge}</span>
+                <button class="btn-delete-q text-slate-400 hover:bg-red-50 hover:text-red-500 p-1.5 rounded-lg transition" data-index="${index}" title="Eliminar">
+                    <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </div>
+            
+            <div class="w-full flex gap-4 items-start pr-32">
+                <div class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-sm font-black flex-shrink-0 mt-1">${index + 1}</div>
+                <div class="flex-grow w-full">
+                    <textarea class="w-full p-0 bg-transparent border-none outline-none resize-none text-slate-700 font-medium text-base question-text" rows="2" data-index="${index}" placeholder="Escribe tu pregunta aquí...">${q.texto}</textarea>
+                </div>
+            </div>
+            ${optionsHtml}
         `;
         modalContainer.appendChild(div);
     });
 
-    // Guardar cambios al teclear
-    modalContainer.querySelectorAll('textarea').forEach(ta => {
-        ta.addEventListener('input', (e) => {
-            preguntasTemporales[e.target.dataset.index] = e.target.value;
+    modalContainer.querySelectorAll('.question-text').forEach(ta => {
+        ta.addEventListener('input', (e) => { preguntasTemporales[e.target.dataset.index].texto = e.target.value; });
+    });
+
+    modalContainer.querySelectorAll('.options-input').forEach(inp => {
+        inp.addEventListener('input', (e) => {
+            let opts = e.target.value.split(',').map(s => s.trim()).filter(s => s !== "");
+            preguntasTemporales[e.target.dataset.index].opciones = opts;
         });
     });
 
-    // Eliminar
     modalContainer.querySelectorAll('.btn-delete-q').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const idx = e.target.dataset.index;
-            preguntasTemporales.splice(idx, 1);
-            renderModalQuestions();
+            preguntasTemporales.splice(e.target.dataset.index, 1); renderModalQuestions();
         });
     });
 }
 
 function openModal() {
-    preguntasTemporales = [...configEncuesta.preguntas]; // Clonar para editar sin afectar base
+    // Clonación profunda
+    preguntasTemporales = JSON.parse(JSON.stringify(configEncuesta.preguntas)); 
     renderModalQuestions();
     modal.classList.remove('hidden');
 }
 function closeModal() { modal.classList.add('hidden'); }
 
 document.getElementById('btn-edit-survey')?.addEventListener('click', () => {
-    if (configEncuesta.activa) {
-        alert("Debes 'Detener la Encuesta' primero para poder editarla de forma segura.");
-        return;
-    }
+    if (configEncuesta.activa) { alert("Debes 'Detener la Encuesta' primero."); return; }
     openModal();
 });
 
 document.getElementById('btn-add-question').addEventListener('click', () => {
-    preguntasTemporales.push("");
+    const tipo = document.getElementById('new-q-type').value;
+    let nuevaQ = { texto: "", tipo: tipo };
+    if (tipo === 'opciones') nuevaQ.opciones = ["Si", "No"];
+    
+    preguntasTemporales.push(nuevaQ);
     renderModalQuestions();
-    // Scroll down
     setTimeout(() => { modalContainer.scrollTop = modalContainer.scrollHeight; }, 100);
 });
 
@@ -550,13 +605,17 @@ document.getElementById('btn-close-modal-x').addEventListener('click', closeModa
 document.getElementById('btn-cancel-edit').addEventListener('click', closeModal);
 
 document.getElementById('btn-save-edit').addEventListener('click', async () => {
-    // Limpiar espacios vacíos
-    const preguntasLimpias = preguntasTemporales.map(p => p.trim()).filter(p => p !== "");
+    // Validación
+    let invalidas = false;
+    let preguntasLimpias = preguntasTemporales.map(p => {
+        p.texto = p.texto.trim();
+        if(p.texto === "") invalidas = true;
+        if(p.tipo === 'opciones' && (!p.opciones || p.opciones.length < 2)) invalidas = true;
+        return p;
+    });
     
-    if (preguntasLimpias.length === 0) {
-        alert("La encuesta debe tener al menos una pregunta.");
-        return;
-    }
+    if (preguntasLimpias.length === 0) { alert("Añade al menos una pregunta."); return; }
+    if (invalidas) { alert("Hay preguntas vacías o de 'Opción Múltiple' sin suficientes opciones válidas separadas por coma."); return; }
 
     try {
         const btnSave = document.getElementById('btn-save-edit');
@@ -565,14 +624,13 @@ document.getElementById('btn-save-edit').addEventListener('click', async () => {
         await updateDoc(doc(db, "configuracion", "encuesta_activa"), { preguntas: preguntasLimpias });
         configEncuesta.preguntas = preguntasLimpias;
         initSurvey();
-        updateDashboardView(); // Actualiza etiquetas P1, P2...
+        updateDashboardView(); 
         closeModal();
         
-        btnSave.innerText = "Guardar en Base de Datos"; btnSave.disabled = false;
+        btnSave.innerText = "Guardar Cambios"; btnSave.disabled = false;
     } catch(e) {
-        console.error(e);
         alert("Error al guardar en Firebase.");
-        document.getElementById('btn-save-edit').innerText = "Guardar en Base de Datos"; 
+        document.getElementById('btn-save-edit').innerText = "Guardar Cambios"; 
         document.getElementById('btn-save-edit').disabled = false;
     }
 });
@@ -582,19 +640,14 @@ document.getElementById('btn-save-edit').addEventListener('click', async () => {
 document.getElementById('btn-show-admin').onclick = () => showPage('admin-login');
 document.getElementById('btn-back-home').onclick = () => showPage('welcome-page');
 document.getElementById('btn-logout').onclick = () => {
-    document.getElementById('admin-user').value = '';
-    document.getElementById('admin-pass').value = '';
+    document.getElementById('admin-user').value = ''; document.getElementById('admin-pass').value = '';
     showPage('welcome-page');
 };
 
 document.getElementById('btn-login').onclick = () => {
-    if(document.getElementById('admin-user').value === 'santillana' && 
-       document.getElementById('admin-pass').value === 'admin2026') {
-        showPage('admin-dashboard');
-        loadDashboardData(); 
-    } else {
-        alert("Credenciales incorrectas");
-    }
+    if(document.getElementById('admin-user').value === 'santillana' && document.getElementById('admin-pass').value === 'admin2026') {
+        showPage('admin-dashboard'); loadDashboardData(); 
+    } else alert("Credenciales incorrectas");
 };
 
 // Iniciar app
