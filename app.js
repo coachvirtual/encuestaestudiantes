@@ -1,6 +1,8 @@
 // Importamos Firebase Modular (SDK v10)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, writeBatch, doc, deleteDoc, getDoc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+// NUEVO: Importamos los módulos de Autenticación
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.18.5/package/xlsx.mjs";
 
 const firebaseConfig = {
@@ -15,10 +17,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app); // NUEVO: Inicializamos Auth
 
 // --- VARIABLES GLOBALES ---
 let schools = []; 
 let selectedSchool = null;
+let selectedLevel = null; // NUEVO: Variable para almacenar el nivel
 let answers = {}; 
 
 let allResponses = [];
@@ -54,7 +58,6 @@ async function loadSurveyConfig() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
             let data = docSnap.data();
-            // Retrocompatibilidad: convertir strings viejos a objetos likert
             if(data.preguntas) {
                 data.preguntas = data.preguntas.map(q => typeof q === 'string' ? { texto: q, tipo: 'likert' } : q);
             }
@@ -98,7 +101,7 @@ const showPage = (id) => {
 function initSurvey() {
     const container = document.getElementById('questions-container');
     container.innerHTML = ''; 
-    answers = {}; // Reset respuestas
+    answers = {}; 
 
     configEncuesta.preguntas.forEach((q, idx) => {
         const div = document.createElement('div');
@@ -127,7 +130,6 @@ function initSurvey() {
         container.appendChild(div);
     });
 
-    // Lógica Likert
     document.querySelectorAll('.likert-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const qIdx = e.target.dataset.q;
@@ -137,7 +139,6 @@ function initSurvey() {
         });
     });
 
-    // Lógica Opciones
     configEncuesta.preguntas.forEach((q, idx) => {
         if (q.tipo === 'opciones') {
             document.querySelectorAll(`input[name="q-${idx}"]`).forEach(radio => {
@@ -158,7 +159,7 @@ function initSurvey() {
     });
 }
 
-// --- 2. BUSCADOR DE COLEGIOS ---
+// --- 2. BUSCADOR DE COLEGIOS Y NIVEL ---
 async function loadSchoolsFromFirebase() {
     try {
         const querySnapshot = await getDocs(collection(db, "colegios"));
@@ -169,32 +170,55 @@ async function loadSchoolsFromFirebase() {
 
 const searchInput = document.getElementById('school-search');
 const resultsDiv = document.getElementById('school-results');
+const levelSelect = document.getElementById('level-select'); // NUEVO
 const btnStart = document.getElementById('btn-start');
+
+// NUEVO: Función centralizada para habilitar el botón de inicio
+const validarInicio = () => {
+    if (selectedSchool && selectedLevel) {
+        btnStart.disabled = false;
+        btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+    } else {
+        btnStart.disabled = true;
+        btnStart.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+};
 
 searchInput.addEventListener('input', (e) => {
     const val = e.target.value.toLowerCase();
     resultsDiv.innerHTML = '';
-    btnStart.disabled = true; btnStart.classList.add('opacity-50', 'cursor-not-allowed');
     selectedSchool = null;
+    validarInicio(); // Validar al borrar
 
     if(val.length < 2) { resultsDiv.classList.add('hidden'); return; }
     
-    const filtered = schools.filter(s => s.nombre.toLowerCase().includes(val));
+    // Optimización: Mostrar solo los primeros 15 resultados para no saturar el DOM
+    const filtered = schools.filter(s => s.nombre.toLowerCase().includes(val)).slice(0, 15);
+    
     if(filtered.length > 0) {
         filtered.forEach(s => {
             const d = document.createElement('div');
             d.className = "p-4 hover:bg-fuchsia-50 cursor-pointer border-b border-slate-100 text-sm transition text-slate-700";
             d.innerText = s.nombre;
             d.onclick = () => {
-                selectedSchool = s; searchInput.value = ''; resultsDiv.classList.add('hidden');
+                selectedSchool = s; 
+                searchInput.value = ''; 
+                resultsDiv.classList.add('hidden');
                 const n = document.getElementById('selected-school-name');
-                n.innerText = "✓ Colegio seleccionado: " + s.nombre; n.classList.remove('hidden');
-                btnStart.disabled = false; btnStart.classList.remove('opacity-50', 'cursor-not-allowed');
+                n.innerText = "✓ Colegio seleccionado: " + s.nombre; 
+                n.classList.remove('hidden');
+                validarInicio(); // NUEVO: Validar si ya hay nivel seleccionado
             };
             resultsDiv.appendChild(d);
         });
         resultsDiv.classList.remove('hidden');
     }
+});
+
+// NUEVO: Escuchar cambios en el select de nivel
+levelSelect.addEventListener('change', (e) => {
+    selectedLevel = e.target.value;
+    validarInicio();
 });
 
 btnStart.addEventListener('click', () => {
@@ -204,7 +228,6 @@ btnStart.addEventListener('click', () => {
 
 // --- 3. ENVIAR ENCUESTA ---
 document.getElementById('btn-submit').addEventListener('click', async () => {
-    // Validar que se respondieron todas las preguntas requeridas (Likert y Opciones). Abiertas son opcionales.
     let faltanRespuestas = false;
     configEncuesta.preguntas.forEach((q, i) => {
         if (q.tipo === 'likert' || q.tipo === 'opciones') {
@@ -225,11 +248,12 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
         const payload = {
             colegio_id: selectedSchool.id,
             colegio_nombre: selectedSchool.nombre,
+            nivel: selectedLevel, // NUEVO: Guardamos el nivel seleccionado
             regional: selectedSchool.regional || "Sin asignar",
             lineaNegocio: selectedSchool.lineaNegocio || "Sin asignar",
             clasificacion: selectedSchool.clasificacion || "Sin asignar",
             coach: selectedSchool.coach || "Sin asignar",
-            respuestas_likert: answers, // Guarda tanto ints (likert) como strings (opciones/abierta)
+            respuestas_likert: answers,
             comentario_abierto: openQuestionText || "Sin comentarios",
             fecha: new Date().toISOString()
         };
@@ -243,12 +267,16 @@ document.getElementById('btn-submit').addEventListener('click', async () => {
 });
 
 function resetApp() {
-    selectedSchool = null; answers = {};
+    selectedSchool = null; 
+    selectedLevel = null; // NUEVO
+    answers = {};
     document.getElementById('school-search').value = '';
+    document.getElementById('level-select').value = ''; // NUEVO: Resetear select
     document.getElementById('selected-school-name').classList.add('hidden');
     document.getElementById('open-question').value = '';
-    document.getElementById('btn-start').disabled = true;
-    document.getElementById('btn-start').classList.add('opacity-50', 'cursor-not-allowed');
+    
+    validarInicio(); // NUEVO: Deshabilitar botón
+    
     document.getElementById('btn-submit').innerText = "Finalizar Encuesta";
     document.getElementById('btn-submit').disabled = false;
     verificarDisponibilidad(); 
@@ -294,7 +322,6 @@ document.getElementById('excel-import').addEventListener('change', (e) => {
 Chart.defaults.font.family = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 Chart.defaults.color = '#94a3b8'; 
 
-// Calcula promedio SOLO para preguntas Likert
 const calcularPromedioDoc = (respuestas) => {
     let sum = 0; let count = 0;
     configEncuesta.preguntas.forEach((q, i) => {
@@ -436,9 +463,8 @@ function renderTable() {
         tr.className = "hover:bg-slate-50 transition border-b border-slate-100 last:border-0";
         tr.innerHTML = `
             <td class="p-4 font-bold text-[#0f172a]">${c.colegio_nombre}</td>
-            <td class="p-4 text-xs font-bold text-slate-500">${c.lineaNegocio || '-'}</td>
+            <td class="p-4 text-xs font-bold text-slate-500">${c.nivel || '-'}</td> <td class="p-4 text-xs font-bold text-slate-500">${c.lineaNegocio || '-'}</td>
             <td class="p-4 text-xs font-bold text-slate-500">${c.regional || '-'}</td>
-            <td class="p-4 text-xs text-slate-500">${c.coach || '-'}</td>
             <td class="p-4 text-center font-bold"><span class="px-3 py-1 rounded-full border ${colorClass}">${avg}</span></td>
             <td class="p-4 text-slate-600 text-sm max-w-xs truncate" title="${c.comentario_abierto}">"${c.comentario_abierto}"</td>
             <td class="p-4 text-center">
@@ -472,6 +498,7 @@ document.getElementById('btn-export').addEventListener('click', async () => {
             "Fecha": new Date(data.fecha).toLocaleString(),
             "Regional": data.regional,
             "Colegio": data.colegio_nombre,
+            "Nivel": data.nivel || "Sin asignar", // NUEVO: Incluido en exportación
             "Línea de Negocio": data.lineaNegocio,
             "Clasificación": data.clasificacion,
             "Coach": data.coach
@@ -579,7 +606,6 @@ function renderModalQuestions() {
 }
 
 function openModal() {
-    // Clonación profunda
     preguntasTemporales = JSON.parse(JSON.stringify(configEncuesta.preguntas)); 
     renderModalQuestions();
     modal.classList.remove('hidden');
@@ -605,7 +631,6 @@ document.getElementById('btn-close-modal-x').addEventListener('click', closeModa
 document.getElementById('btn-cancel-edit').addEventListener('click', closeModal);
 
 document.getElementById('btn-save-edit').addEventListener('click', async () => {
-    // Validación
     let invalidas = false;
     let preguntasLimpias = preguntasTemporales.map(p => {
         p.texto = p.texto.trim();
@@ -636,19 +661,65 @@ document.getElementById('btn-save-edit').addEventListener('click', async () => {
 });
 
 
-// --- ADMIN LOGIN ---
-document.getElementById('btn-show-admin').onclick = () => showPage('admin-login');
-document.getElementById('btn-back-home').onclick = () => showPage('welcome-page');
-document.getElementById('btn-logout').onclick = () => {
-    document.getElementById('admin-user').value = ''; document.getElementById('admin-pass').value = '';
-    showPage('welcome-page');
+// --- ADMIN LOGIN (NUEVO: LÓGICA CON FIREBASE AUTH) ---
+document.getElementById('btn-show-admin').onclick = () => {
+    // Si ya está logueado, pasa directo al dashboard
+    if (auth.currentUser) {
+        showPage('admin-dashboard');
+        loadDashboardData();
+    } else {
+        showPage('admin-login');
+    }
 };
 
-document.getElementById('btn-login').onclick = () => {
-    if(document.getElementById('admin-user').value === 'santillana' && document.getElementById('admin-pass').value === 'admin2026') {
-        showPage('admin-dashboard'); loadDashboardData(); 
-    } else alert("Credenciales incorrectas");
+document.getElementById('btn-back-home').onclick = () => showPage('welcome-page');
+
+// Login con Auth
+document.getElementById('btn-login').onclick = async () => {
+    const email = document.getElementById('admin-user').value; // Asume que el usuario ingresa su correo aquí
+    const pass = document.getElementById('admin-pass').value;
+    
+    const btn = document.getElementById('btn-login');
+    btn.innerText = "Verificando..."; btn.disabled = true;
+
+    try {
+        await signInWithEmailAndPassword(auth, email, pass);
+        // El listener onAuthStateChanged se encargará de la redirección
+    } catch (error) {
+        alert("Credenciales incorrectas. Verifica tu correo y contraseña.");
+        btn.innerText = "Entrar al Dashboard"; btn.disabled = false;
+    }
 };
+
+// Logout con Auth
+document.getElementById('btn-logout').onclick = async () => {
+    try {
+        await signOut(auth);
+        document.getElementById('admin-user').value = ''; 
+        document.getElementById('admin-pass').value = '';
+        showPage('welcome-page');
+    } catch (error) {
+        console.error("Error cerrando sesión", error);
+    }
+};
+
+// Listener de estado de autenticación
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        // Si el usuario se loguea y está en la pantalla de login, lo mandamos al dashboard
+        if (!document.getElementById('admin-login').classList.contains('hidden')) {
+            showPage('admin-dashboard');
+            loadDashboardData();
+            document.getElementById('btn-login').innerText = "Entrar al Dashboard"; 
+            document.getElementById('btn-login').disabled = false;
+        }
+    } else {
+        // Si el usuario no existe (o cerró sesión) y trata de ver el dashboard, lo regresamos al inicio
+        if (!document.getElementById('admin-dashboard').classList.contains('hidden')) {
+            showPage('welcome-page');
+        }
+    }
+});
 
 // Iniciar app
 showPage('welcome-page');
