@@ -71,6 +71,7 @@
 
     <div id="app" class="max-w-7xl mx-auto py-10 px-4 flex-grow w-full flex flex-col justify-center">
         
+        <!-- BIENVENIDA -->
         <section id="welcome-page" class="flex flex-col items-center text-center space-y-8 w-full max-w-2xl mx-auto">
             <div class="flex items-center gap-8 justify-center mb-4">
                 <img src="./assets/logo-santillana.png" alt="Santillana" class="h-16 md:h-20 object-contain">
@@ -82,11 +83,25 @@
             <p class="text-fuchsia-600 mt-2 font-medium text-lg md:text-xl">Estudiantes, su experiencia digital es nuestro motor de innovación.</p>
 
             <div class="glass-card p-8 rounded-2xl w-full relative z-50 mt-8 text-left border-t-4 border-t-fuchsia-500">
-                <label class="block text-base font-bold mb-3 text-slate-700">Para comenzar, busca tu colegio:</label>
-                <input type="text" id="school-search" placeholder="Escribe el nombre de tu institución..." 
-                       class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-fuchsia-500 outline-none transition text-lg disabled:opacity-50">
-                <div id="school-results" class="absolute z-10 w-[88%] bg-white border border-slate-200 rounded-b-xl hidden shadow-2xl max-h-56 overflow-y-auto"></div>
-                
+                <!-- Buscador de Colegio -->
+                <div class="mb-6">
+                    <label class="block text-base font-bold mb-3 text-slate-700">1. Busca tu colegio:</label>
+                    <input type="text" id="school-search" placeholder="Escribe el nombre de tu institución..." 
+                           class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-fuchsia-500 outline-none transition text-lg disabled:opacity-50">
+                    <div id="school-results" class="absolute z-10 w-[88%] bg-white border border-slate-200 rounded-b-xl hidden shadow-2xl max-h-56 overflow-y-auto"></div>
+                </div>
+
+                <!-- Selector de Nivel -->
+                <div class="mb-6">
+                    <label class="block text-base font-bold mb-3 text-slate-700">2. Selecciona tu nivel:</label>
+                    <select id="level-select" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-fuchsia-500 outline-none transition text-lg">
+                        <option value="" disabled selected>Elige una opción...</option>
+                        <option value="Primaria">Primaria</option>
+                        <option value="Bachillerato">Bachillerato</option>
+                        <option value="Media">Media</option>
+                    </select>
+                </div>
+
                 <div class="min-h-[2rem] mt-3">
                     <p id="selected-school-name" class="text-sm text-fuchsia-600 font-bold hidden bg-fuchsia-50 p-2 rounded-lg border border-fuchsia-100"></p>
                 </div>
@@ -97,11 +112,15 @@
             </div>
         </section>
 
+        <!-- PREGUNTAS -->
         <section id="questions-page" class="hidden flex flex-col space-y-8 w-full max-w-4xl mx-auto">
             <div class="text-center mb-8">
                 <h2 class="text-3xl font-bold text-[#0f172a]">Experiencia y Usabilidad</h2>
                 <p class="text-sm text-slate-500 mt-1">Califica de 1 a 5 o selecciona la opción que mejor se adapte a tu experiencia.</p>
-                <p id="display-school-name" class="text-fuchsia-600 font-bold mt-2 text-xl"></p>
+                <div class="flex flex-col gap-1 mt-2">
+                    <p id="display-school-name" class="text-fuchsia-600 font-bold text-xl"></p>
+                    <p id="display-level-name" class="text-slate-500 font-medium text-sm italic"></p>
+                </div>
             </div>
 
             <div id="questions-container" class="space-y-4"></div>
@@ -116,6 +135,7 @@
             </button>
         </section>
 
+        <!-- GRACIAS -->
         <section id="thank-you-page" class="hidden flex flex-col items-center justify-center text-center space-y-6 py-20 w-full">
             <div class="bg-green-50 p-6 rounded-full mb-4 border border-green-200 shadow-sm">
                 <svg class="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
@@ -125,16 +145,18 @@
             <p class="text-sm text-fuchsia-600 mt-8 font-medium animate-pulse">Volviendo al inicio...</p>
         </section>
 
+        <!-- ADMIN LOGIN -->
         <section id="admin-login" class="hidden max-w-md mx-auto mt-10 neo-card p-8 w-full border-t-4 border-t-blue-500">
             <h2 class="text-2xl font-bold mb-6 text-center text-[#0f172a]">Acceso Administrativo</h2>
             <div class="space-y-4">
-                <input type="text" id="admin-user" placeholder="Usuario" class="w-full p-4 neo-inset text-slate-600 focus:ring-2 focus:ring-blue-400 outline-none">
+                <input type="email" id="admin-user" placeholder="Correo Electrónico" class="w-full p-4 neo-inset text-slate-600 focus:ring-2 focus:ring-blue-400 outline-none">
                 <input type="password" id="admin-pass" placeholder="Contraseña" class="w-full p-4 neo-inset text-slate-600 focus:ring-2 focus:ring-blue-400 outline-none">
                 <button id="btn-login" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl font-bold shadow-[0_10px_20px_rgba(37,99,235,0.3)] hover:shadow-[0_15px_25px_rgba(37,99,235,0.4)] transition">Entrar al Dashboard</button>
                 <button id="btn-back-home" class="w-full text-slate-400 text-sm mt-4 hover:text-fuchsia-600">Volver a la encuesta</button>
             </div>
         </section>
 
+        <!-- DASHBOARD -->
         <section id="admin-dashboard" class="hidden flex flex-col space-y-8 w-full max-w-7xl mx-auto pb-10">
             
             <div class="flex flex-col lg:flex-row justify-between items-center gap-4">
@@ -167,6 +189,7 @@
                 </div>
             </div>
 
+            <!-- Stats -->
             <div class="flex flex-col lg:flex-row gap-8">
                 <div class="w-full lg:w-1/3 flex flex-col gap-8 justify-center">
                     <div class="neo-card p-8 relative overflow-hidden group">
@@ -193,6 +216,7 @@
                 </div>
             </div>
 
+            <!-- Charts -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div class="neo-card p-8">
                     <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">Rendimiento por Regional</h3>
@@ -204,6 +228,7 @@
                 </div>
             </div>
 
+            <!-- Table -->
             <div class="neo-card p-8 overflow-hidden">
                 <h3 class="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6">Base de Datos de Encuestas</h3>
                 <div class="overflow-x-auto no-scrollbar bg-white rounded-2xl border border-slate-100 shadow-inner">
@@ -211,7 +236,7 @@
                         <thead>
                             <tr class="bg-slate-50 border-b border-slate-100">
                                 <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Colegio</th>
-                                <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Línea</th>
+                                <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Nivel</th>
                                 <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Regional</th>
                                 <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Coach</th>
                                 <th class="p-4 font-bold text-slate-400 text-xs uppercase tracking-wider text-center">Calificación</th>
@@ -231,6 +256,7 @@
         </section>
     </div>
 
+    <!-- MODAL EDITAR -->
     <div id="modal-edit-survey" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh] transform transition-all">
             
@@ -269,40 +295,5 @@
     </div>
 
     <script type="module" src="./app.js"></script>
-    <script>
-        const observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.attributeName === "class") {
-                    const welcomePage = document.getElementById('welcome-page');
-                    const adminDash = document.getElementById('admin-dashboard');
-                    const navLogos = document.getElementById('nav-logos');
-                    const body = document.getElementById('main-body');
-                    const nav = document.getElementById('main-nav');
-
-                    if (!welcomePage.classList.contains('hidden')) {
-                        navLogos.classList.add('hidden');
-                        navLogos.classList.remove('md:flex');
-                    } else {
-                        navLogos.classList.remove('hidden');
-                        navLogos.classList.add('md:flex');
-                    }
-
-                    if (!adminDash.classList.contains('hidden')) {
-                        body.classList.remove('bg-slate-50');
-                        body.classList.add('neo-bg');
-                        nav.classList.remove('bg-white/90');
-                        nav.classList.add('bg-[#f3f4f6]/90');
-                    } else {
-                        body.classList.add('bg-slate-50');
-                        body.classList.remove('neo-bg');
-                        nav.classList.add('bg-white/90');
-                        nav.classList.remove('bg-[#f3f4f6]/90');
-                    }
-                }
-            });
-        });
-        observer.observe(document.getElementById('welcome-page'), { attributes: true });
-        observer.observe(document.getElementById('admin-dashboard'), { attributes: true });
-    </script>
 </body>
 </html>
